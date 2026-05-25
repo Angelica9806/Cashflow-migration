@@ -105,6 +105,28 @@ html,body{height:100%;font-family:'Inter',system-ui,sans-serif;background:var(--
 }
 .plb.on{background:var(--grb);color:var(--gr);border-color:rgba(34,197,94,.4)}
 .plb:hover{border-color:rgba(34,197,94,.3);color:var(--tx)}
+/* ── Multi-select dropdown ── */
+.ms-wrap{position:relative}
+.ms-btn{
+  height:30px;padding:0 10px;background:var(--s2);border:1px solid var(--bd2);
+  border-radius:7px;font-size:11px;color:var(--tx);font-family:inherit;
+  cursor:pointer;display:flex;align-items:center;gap:6px;white-space:nowrap;
+  min-width:130px;transition:.12s;justify-content:space-between;
+}
+.ms-btn:hover,.ms-btn:focus{outline:none;border-color:var(--gr)}
+.ms-drop{
+  position:absolute;top:34px;left:0;z-index:200;
+  background:var(--s1);border:1px solid var(--bd2);border-radius:9px;
+  padding:5px;min-width:190px;max-height:260px;overflow-y:auto;
+  box-shadow:0 8px 32px rgba(0,0,0,.55);
+}
+.ms-item{
+  display:flex;align-items:center;gap:8px;padding:5px 8px;border-radius:6px;
+  font-size:11px;color:var(--tx);cursor:pointer;user-select:none;
+}
+.ms-item:hover{background:var(--s2)}
+.ms-item input[type=checkbox]{accent-color:var(--gr);width:13px;height:13px;cursor:pointer;flex-shrink:0}
+.ms-sep{height:1px;background:var(--bd);margin:4px 2px}
 .f-badge{
   display:inline-flex;align-items:center;gap:4px;
   height:30px;padding:0 10px;background:var(--grb);color:var(--gr);
@@ -338,16 +360,28 @@ tbody tr:hover td{background:rgba(255,255,255,.025)}
       <button class="plb on" data-pl="Prepaid Wallet">Prepaid Wallet</button>
     </div>
   </div>
-  <div class="fi" id="fi-plat" style="max-width:none;flex:1">
+  <div class="fi" id="fi-plat">
     <label>Plataforma</label>
-    <div class="pl-btns" id="fPlatBtns">
-      <button class="plb on" id="platAll" onclick="toggleAllPlat()">Todas</button>
+    <div class="ms-wrap" id="plat-wrap">
+      <button class="ms-btn" id="plat-btn" type="button" onclick="platToggleDrop()">
+        <span id="plat-lbl">Todas</span>
+        <svg width="10" height="10" viewBox="0 0 10 10" fill="none"><path d="M2 3.5l3 3 3-3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </button>
+      <div class="ms-drop" id="plat-drop" style="display:none">
+        <label class="ms-item">
+          <input type="checkbox" id="plat-chk-all" onchange="platChkAll(this)" checked> Todas las plataformas
+        </label>
+        <div class="ms-sep"></div>
+        <div id="plat-items"></div>
+      </div>
     </div>
   </div>
   <datalist id="dl-cli"></datalist>
   <div class="fi"><label>Cliente</label><input type="text" id="fCli" list="dl-cli" placeholder="Todos" autocomplete="off" style="min-width:118px"></div>
   <div class="fi" id="fi-cliName"><label>Client Name</label>
-    <div class="ac-wrap"><input type="text" id="fCliName" placeholder="Buscar..." autocomplete="off" style="min-width:160px" oninput="acShow('fCliName')" onfocus="acShow('fCliName')" onblur="acHide('fCliName')"><div id="fCliName-drop" class="ac-drop"></div></div>
+    <select id="fCliName" style="min-width:170px">
+      <option value="">Todas</option>
+    </select>
   </div>
   <div class="fi" id="fi-accMgr" style="display:none"><label>Acc. Manager</label>
     <div class="ac-wrap"><input type="text" id="fAccMgr" placeholder="Buscar..." autocomplete="off" style="min-width:140px" oninput="acShow('fAccMgr')" onfocus="acShow('fAccMgr')" onblur="acHide('fAccMgr')"><div id="fAccMgr-drop" class="ac-drop"></div></div>
@@ -693,48 +727,29 @@ async function loadFilters(){
       if(norm===null) return;
       (normToRaw[norm]=normToRaw[norm]||[]).push(raw);
     });
-    const platContainer=document.getElementById('fPlatBtns');
+    // Poblar plataformas como checkboxes en el dropdown
+    const platItems=document.getElementById('plat-items');
     Object.keys(normToRaw).sort().forEach(norm=>{
-      const b=document.createElement('button');
-      b.className='plb on';b.dataset.pl=norm;b.textContent=norm;
-      b.addEventListener('click',()=>{b.classList.toggle('on');syncPlatAll()});
-      platContainer.appendChild(b);
+      const lbl=document.createElement('label');
+      lbl.className='ms-item';
+      lbl.innerHTML=`<input type="checkbox" value="${norm}" onchange="platChkOne()" checked> ${norm}`;
+      platItems.appendChild(lbl);
     });
     F.plat=[]; // vacío = sin filtro (todas seleccionadas)
 
-    // Cliente: paginar en chunks de 1000
-    let cliRows=[], cf=0;
-    while(true){
-      const {data,error}=await SB.from('consolidated').select('client').range(cf,cf+999);
-      if(error||!data?.length) break;
-      cliRows=cliRows.concat(data);
-      if(data.length<1000) break;
-      cf+=1000;
+    // ── RPC: obtener valores únicos en una sola query (mucho más rápido) ──
+    const {data:opts,error:optsErr}=await SB.rpc('get_filter_options');
+    if(optsErr){console.error('get_filter_options error:',optsErr);}
+    else if(opts){
+      // Client IDs → datalist
+      const dlCli=document.getElementById('dl-cli');
+      (opts.clients||[]).forEach(v=>dlCli.appendChild(new Option(v,v)));
+      // Client Names → select
+      const cliNameSel=document.getElementById('fCliName');
+      (opts.client_names||[]).forEach(v=>cliNameSel.appendChild(new Option(v,v)));
+      // Account Managers → autocomplete
+      AC['fAccMgr']=(opts.account_managers||[]).filter(Boolean);
     }
-    // Client IDs → native datalist dl-cli
-    uniqs(cliRows,'client').forEach(v=>document.getElementById('dl-cli').appendChild(new Option(v,v)));
-
-    // client_name → custom autocomplete AC['fCliName']
-    let cnRows=[], cnf=0;
-    while(true){
-      const {data,error}=await SB.from('consolidated').select('client_name').range(cnf,cnf+999);
-      if(error||!data?.length) break;
-      cnRows=cnRows.concat(data);
-      if(data.length<1000) break;
-      cnf+=1000;
-    }
-    AC['fCliName']=uniqs(cnRows,'client_name').filter(Boolean);
-
-    // account_manager → custom autocomplete AC['fAccMgr']
-    let amRows=[], amf=0;
-    while(true){
-      const {data,error}=await SB.from('consolidated').select('account_manager').range(amf,amf+999);
-      if(error||!data?.length) break;
-      amRows=amRows.concat(data);
-      if(data.length<1000) break;
-      amf+=1000;
-    }
-    AC['fAccMgr']=uniqs(amRows,'account_manager').filter(Boolean);
 
     // P&L/FCF: hardcodeado como botones toggle — no requiere query DB
   }catch(e){console.error('loadFilters error:',e)}
@@ -749,10 +764,10 @@ function applyF(){
   F.d1   =document.getElementById('fD1').value||null;
   F.d2   =document.getElementById('fD2').value||null;
   F.pl   =[...document.querySelectorAll('#fPLBtns .plb.on')].map(b=>b.dataset.pl);
-  // Plataforma: si todas están activas → sin filtro (array vacío); si algunas → filtrar
-  const allPlatBtns=[...document.querySelectorAll('#fPlatBtns .plb:not(#platAll)')];
-  const onPlats=allPlatBtns.filter(b=>b.classList.contains('on')).map(b=>b.dataset.pl);
-  F.plat = onPlats.length===allPlatBtns.length ? [] : onPlats;
+  // Plataforma: leer desde checkboxes del dropdown
+  const allPlatChks=[...document.querySelectorAll('#plat-items input[type=checkbox]')];
+  const selPlats=allPlatChks.filter(c=>c.checked).map(c=>c.value);
+  F.plat = selPlats.length===allPlatChks.length ? [] : selPlats;
   F.cli        =document.getElementById('fCli').value;
   F.vrn        =document.getElementById('fVRN').value;
   F.clientName =document.getElementById('fCliName').value;
@@ -761,9 +776,13 @@ function applyF(){
   loadTab(TAB);
 }
 function resetF(){
-  ['fFrom','fTo','fD1','fD2'].forEach(id=>document.getElementById(id).value='');
-  ['fCli','fVRN','fCliName','fAccMgr'].forEach(id=>document.getElementById(id).value='');
-  document.querySelectorAll('.plb').forEach(b=>b.classList.add('on'));
+  ['fFrom','fTo','fD1','fD2','fCli','fVRN','fAccMgr'].forEach(id=>document.getElementById(id).value='');
+  document.getElementById('fCliName').value='';
+  // Reset plataformas
+  document.querySelectorAll('#plat-items input[type=checkbox],#plat-chk-all').forEach(c=>c.checked=true);
+  updatePlatLabel();
+  // Reset P&L buttons
+  document.querySelectorAll('#fPLBtns .plb').forEach(b=>b.classList.add('on'));
   F={from:null,to:null,d1:null,d2:null,pl:['TPV','Prepaid Wallet'],plat:[],cli:'',vrn:'',clientName:'',accMgr:''};
   updateDayBadge();
   loadTab(TAB);
@@ -780,21 +799,38 @@ function updateDayBadge(){
 document.querySelectorAll('#fPLBtns .plb').forEach(b=>{
   b.addEventListener('click',()=>b.classList.toggle('on'));
 });
-function toggleAllPlat(){
-  const btns=[...document.querySelectorAll('#fPlatBtns .plb:not(#platAll)')];
-  const allOn=btns.every(b=>b.classList.contains('on'));
-  btns.forEach(b=>allOn?b.classList.remove('on'):b.classList.add('on'));
-  syncPlatAll();
+function platToggleDrop(){
+  const d=document.getElementById('plat-drop');
+  const open=d.style.display==='none';
+  d.style.display=open?'block':'none';
+  if(open) setTimeout(()=>document.addEventListener('click',platOutside,{once:true}),50);
 }
-function syncPlatAll(){
-  const btns=[...document.querySelectorAll('#fPlatBtns .plb:not(#platAll)')];
-  const allOn=btns.every(b=>b.classList.contains('on'));
-  const noneOn=btns.every(b=>!b.classList.contains('on'));
-  const allBtn=document.getElementById('platAll');
-  if(allOn){allBtn.classList.add('on')}
-  else if(noneOn){allBtn.classList.remove('on')}
-  else{allBtn.classList.remove('on');allBtn.style.background='rgba(251,191,36,.12)';allBtn.style.color='#fbbf24';allBtn.style.borderColor='rgba(251,191,36,.4)';return}
-  allBtn.style.background='';allBtn.style.color='';allBtn.style.borderColor='';
+function platOutside(e){
+  const wrap=document.getElementById('plat-wrap');
+  if(wrap&&wrap.contains(e.target)){
+    document.addEventListener('click',platOutside,{once:true});
+  } else {
+    const d=document.getElementById('plat-drop');
+    if(d) d.style.display='none';
+  }
+}
+function platChkAll(chk){
+  document.querySelectorAll('#plat-items input[type=checkbox]').forEach(c=>c.checked=chk.checked);
+  updatePlatLabel();
+}
+function platChkOne(){
+  const all=[...document.querySelectorAll('#plat-items input[type=checkbox]')];
+  document.getElementById('plat-chk-all').checked=all.every(c=>c.checked);
+  updatePlatLabel();
+}
+function updatePlatLabel(){
+  const all=[...document.querySelectorAll('#plat-items input[type=checkbox]')];
+  const sel=all.filter(c=>c.checked);
+  const lbl=document.getElementById('plat-lbl');
+  if(!lbl) return;
+  if(sel.length===0) lbl.textContent='Ninguna';
+  else if(sel.length===all.length) lbl.textContent='Todas';
+  else lbl.textContent=sel.length+' selec.';
 }
 
 document.querySelectorAll('.sb-link[data-tab]').forEach(a=>{
