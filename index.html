@@ -1406,10 +1406,11 @@ async function loadApproval(){
   document.getElementById('at-tbl-wrap').innerHTML=LD;
   document.getElementById('at-pag').innerHTML='';
   try{
-    // ── Load method filter buttons independently (runs even if main fetch fails) ──
+    // ── Load method filter buttons (limited query) ──
     const {data:methodRows,error:methodErr}=await SB
       .from('payment_approval_times')
-      .select('payment_method');
+      .select('payment_method')
+      .limit(500);
     if(!methodErr&&methodRows?.length){
       const container=document.getElementById('at-methodBtns');
       if(!container.querySelector('[data-method]')){
@@ -1423,14 +1424,23 @@ async function loadApproval(){
       }
     }
 
-    // ── Main paginated fetch ───────────────────────────────────────────────
+    // ── Main fetch con filtro de fecha server-side ──────────────────────────
     const selectCols='payment_method,des_status,des_operation_type,creation_date,state_5,diff_state4_state5';
+    // Rango de fechas: AT tiene sus propios inputs; si están vacíos usar últimos 3 meses
+    const atFrom=(document.getElementById('at-from')?.value)||null;
+    const atTo=(document.getElementById('at-to')?.value)||null;
+    const defFrom=atFrom||(()=>{const d=new Date();d.setMonth(d.getMonth()-3);return d.toISOString().slice(0,10);})();
+    const defTo=atTo||(new Date().toISOString().slice(0,10));
+
     let rows=[],from=0;
     while(true){
-      const {data,error}=await SB.from('payment_approval_times')
+      let q=SB.from('payment_approval_times')
         .select(selectCols)
+        .gte('creation_date',defFrom)
+        .lte('creation_date',defTo)
         .order('creation_date',{ascending:false})
-        .range(from,from+999);
+        .range(from,from+4998);
+      const {data,error}=await q;
       if(error){
         console.error('Approval fetch error:',error);
         document.getElementById('at-method-kpis').innerHTML=
@@ -1443,8 +1453,8 @@ async function loadApproval(){
       }
       if(!data?.length) break;
       rows=rows.concat(data);
-      if(data.length<1000) break;
-      from+=1000;
+      if(data.length<4999) break;
+      from+=4999;
     }
 
     if(rows.length===0){
@@ -1989,6 +1999,11 @@ async function startApp(session){
   document.getElementById('fTo').value=now.toISOString().slice(0,10);
   F.from=document.getElementById('fFrom').value;
   F.to=document.getElementById('fTo').value;
+  // Inicializar fechas del tab Approval Times (sus propios inputs)
+  const atFromEl=document.getElementById('at-from');
+  const atToEl=document.getElementById('at-to');
+  if(atFromEl&&!atFromEl.value) atFromEl.value=start.toISOString().slice(0,10);
+  if(atToEl&&!atToEl.value)     atToEl.value=now.toISOString().slice(0,10);
   await loadFilters();
   loadOverview();
 }
