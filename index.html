@@ -376,8 +376,11 @@ tbody tr:hover td{background:rgba(255,255,255,.025)}
       </div>
     </div>
   </div>
-  <datalist id="dl-cli"></datalist>
-  <div class="fi"><label>Cliente</label><input type="text" id="fCli" list="dl-cli" placeholder="Todos" autocomplete="off" style="min-width:118px"></div>
+  <div class="fi"><label>Cliente</label>
+    <select id="fCli" style="min-width:140px">
+      <option value="">Todos</option>
+    </select>
+  </div>
   <div class="fi" id="fi-cliName"><label>Client Name</label>
     <select id="fCliName" style="min-width:170px">
       <option value="">Todas</option>
@@ -684,12 +687,12 @@ async function fetchAll(extra=[], skipPlat=false, skipPL=false) {
     extra.forEach(([c,v])=>{q=q.eq(c,v)});
     if(!skipPL && F.pl && F.pl.length){ q = q.in('"P&L/FCF"', F.pl); }
     q = q.order('date', {ascending:true}).order('amount', {ascending:true}).order('platform', {ascending:true});
-    const {data,error}=await q.range(from,from+999);
+    const {data,error}=await q.range(from,from+4998);
     if(error){console.error('Fetch error:',error);break}
     if(!data?.length) break;
     rows=rows.concat(data);
-    if(data.length<1000) break;
-    from+=1000;
+    if(data.length<4999) break;
+    from+=4999;
   }
   const rawCount = rows.length;
   // Normalizar y excluir plataformas inválidas (null = excluida)
@@ -741,8 +744,8 @@ async function loadFilters(){
     const {data:opts,error:optsErr}=await SB.rpc('get_filter_options');
     if(optsErr){console.error('get_filter_options error:',optsErr);}
     else if(opts){
-      // Client IDs → datalist
-      const dlCli=document.getElementById('dl-cli');
+      // Client IDs → select
+      const dlCli=document.getElementById('fCli');
       (opts.clients||[]).forEach(v=>dlCli.appendChild(new Option(v,v)));
       // Client Names → select
       const cliNameSel=document.getElementById('fCliName');
@@ -776,7 +779,8 @@ function applyF(){
   loadTab(TAB);
 }
 function resetF(){
-  ['fFrom','fTo','fD1','fD2','fCli','fVRN','fAccMgr'].forEach(id=>document.getElementById(id).value='');
+  ['fFrom','fTo','fD1','fD2','fVRN','fAccMgr'].forEach(id=>document.getElementById(id).value='');
+  document.getElementById('fCli').value='';
   document.getElementById('fCliName').value='';
   // Reset plataformas
   document.querySelectorAll('#plat-items input[type=checkbox],#plat-chk-all').forEach(c=>c.checked=true);
@@ -1970,7 +1974,7 @@ async function startApp(session){
   hideLogin();
   setUserInfo(session.user);
   setupRealtime();
-  const now=new Date(),start=new Date(now.getFullYear(),now.getMonth()-2,1);
+  const now=new Date(),start=new Date(now.getFullYear(),now.getMonth()-3,1);
   document.getElementById('fFrom').value=start.toISOString().slice(0,10);
   document.getElementById('fTo').value=now.toISOString().slice(0,10);
   F.from=document.getElementById('fFrom').value;
