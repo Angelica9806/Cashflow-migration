@@ -740,7 +740,7 @@ async function loadFilters(){
     });
     F.plat=[]; // vacío = sin filtro (todas seleccionadas)
 
-    // ── RPC: obtener valores únicos en una sola query (mucho más rápido) ──
+    // ── RPC: valores únicos para filtros (una sola query) ──
     const {data:opts,error:optsErr}=await SB.rpc('get_filter_options');
     if(optsErr){console.error('get_filter_options error:',optsErr);}
     else if(opts){
@@ -752,6 +752,17 @@ async function loadFilters(){
       (opts.client_names||[]).forEach(v=>cliNameSel.appendChild(new Option(v,v)));
       // Account Managers → autocomplete
       AC['fAccMgr']=(opts.account_managers||[]).filter(Boolean);
+    }
+
+    // ── RPC: mapa client_id → {name, mgr} desde account_managers ──
+    const {data:amRows,error:amErr}=await SB.rpc('get_account_managers');
+    if(amErr){console.error('get_account_managers error:',amErr);}
+    window.AM_MAP={};
+    if(Array.isArray(amRows)){
+      amRows.forEach(r=>{
+        if(r.client) window.AM_MAP[r.client]={name:r.name||'',mgr:r.mgr||'–'};
+      });
+      console.log('%c👥 AM_MAP cargado:','color:#a78bfa;font-weight:700', Object.keys(window.AM_MAP).length, 'clientes');
     }
 
     // P&L/FCF: hardcodeado como botones toggle — no requiere query DB
@@ -1188,8 +1199,9 @@ async function loadVRN(){
   const sinByC=grp(sin,'client');
   const sinRows=sinClients.map(c=>{
     const rs=sinByC[c]||[];
-    const clientName=rs.find(r=>r.client_name)?.client_name||'';
-    const accMgr=rs.find(r=>r.account_manager)?.account_manager||'–';
+    const am=(window.AM_MAP||{})[c]||{};
+    const clientName=am.name||rs.find(r=>r.client_name)?.client_name||'–';
+    const accMgr=am.mgr||rs.find(r=>r.account_manager)?.account_manager||'–';
     const byMon=Object.fromEntries(ms.map(m=>[m,rs.filter(r=>r['AñoYMes']===m).length]));
     return{c,clientName,accMgr,byMon,total:rs.length};
   }).sort((a,b)=>b.total-a.total);
@@ -1332,17 +1344,15 @@ async function loadClientes(){
   const data=await fetchAll();
   if(data.length) console.log('%c🔑 Columnas en consolidated:','color:#fbbf24;font-weight:700', Object.keys(data[0]));
   const ms=mons(data),byCli=grp(data,'client');
-  const _cn=k=>['client_name','Client Name','clientName','legal_name'].includes(k)&&k;
-  const _am=k=>['account_manager','Account Manager','accountManager'].includes(k)&&k;
-  const cnKey=data[0]?Object.keys(data[0]).find(_cn):null;
-  const amKey=data[0]?Object.keys(data[0]).find(_am):null;
-  console.log('%c🗺 campo client_name→','color:#22c55e', cnKey||'NO ENCONTRADO', '| account_manager→', amKey||'NO ENCONTRADO');
-  const cliData=Object.entries(byCli).map(([c,rs])=>({
-    id:c,
-    clientName:(cnKey?rs.find(r=>r[cnKey])?.[cnKey]:null)||c,
-    accMgr:(amKey?rs.find(r=>r[amKey])?.[amKey]:null)||'–',
-    tot:sum(rs,'amount'),byM:Object.fromEntries(ms.map(m=>[m,sum(rs.filter(r=>r['AñoYMes']===m),'amount')]))
-  })).sort((a,b)=>b.tot-a.tot);
+  const cliData=Object.entries(byCli).map(([c,rs])=>{
+    const am=(window.AM_MAP||{})[c]||{};
+    return{
+      id:c,
+      clientName:am.name||rs.find(r=>r.client_name)?.client_name||c,
+      accMgr:am.mgr||rs.find(r=>r.account_manager)?.account_manager||'–',
+      tot:sum(rs,'amount'),byM:Object.fromEntries(ms.map(m=>[m,sum(rs.filter(r=>r['AñoYMes']===m),'amount')]))
+    };
+  }).sort((a,b)=>b.tot-a.tot);
   const lastM=ms[ms.length-1],prevM=ms[ms.length-2];
   const lT=lastM?sum(data.filter(r=>r['AñoYMes']===lastM),'amount'):0;
   const pT=prevM?sum(data.filter(r=>r['AñoYMes']===prevM),'amount'):0;
