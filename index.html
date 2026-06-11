@@ -2198,15 +2198,14 @@ async function fetchPA(){
 }
 
 // ── Helpers para acceso flexible a columnas ──
-// Intentan varios nombres posibles para el mismo campo
-const paDeposit = r=>+(r.deposit??r.amount??r.Deposit??r.total_deposit??0);
-const paGross   = r=>+(r.gross??r['Gross Revenue']??r.gross_revenue??r.Gross??0);
-const paCost    = r=>+(r.cost??r['Cost Revenue']??r.cost_revenue??r.Cost??0);
-const paNet     = r=>+(r.net??r.Net??r.net_revenue??0);
-const paMonth   = r=>r['AñoYMes']??r.period??r.month??r.year_month??r.anio_mes??'';
-const paDay     = r=>+(r.dia??r.day??r.day_of_month??1);
-const paPlatform= r=>r.platform??r.Platform??'';
-const sumPA     = (arr,fn)=>arr.reduce((s,r)=>s+fn(r),0);
+function paDeposit(r){return +(r.deposit!==undefined&&r.deposit!==null?r.deposit:r.amount!==undefined&&r.amount!==null?r.amount:0);}
+function paGross(r){return +(r.gross!==undefined&&r.gross!==null?r.gross:r['Gross Revenue']!==undefined&&r['Gross Revenue']!==null?r['Gross Revenue']:0);}
+function paCost(r){return +(r.cost!==undefined&&r.cost!==null?r.cost:r['Cost Revenue']!==undefined&&r['Cost Revenue']!==null?r['Cost Revenue']:0);}
+function paNet(r){return +(r.net!==undefined&&r.net!==null?r.net:r.Net!==undefined&&r.Net!==null?r.Net:0);}
+function paMonth(r){return r['AñoYMes']||r.period||r.month||r.year_month||r.anio_mes||'';}
+function paDay(r){return +(r.dia||r.day||r.day_of_month||1);}
+function paPlatform(r){return r.platform||r.Platform||'';}
+function sumPA(arr,fn){return arr.reduce(function(s,r){return s+fn(r);},0);}
 
 async function loadPersonalAccount(){
   ['pa-tpv-kpis','pa-tpv-plat','pa-rev-kpis','pa-rev-plat','pa-comp-tbl','pa-rev-comp-tbl'].forEach(id=>{
@@ -2326,7 +2325,8 @@ async function loadPersonalAccount(){
   barC('c-pa-rev-plat',platforms,[{label:'Gross',data:platforms.map(p=>sumPA(data.filter(r=>paPlatform(r)===p),paGross)),backgroundColor:platforms.map((_,i)=>PAL[i%PAL.length]),borderRadius:4}]);
 
   // ── Revenue comparative periods ──
-  const revCutDay=+document.getElementById('paRevCompDay')?.value||(F.d2?+F.d2:cutDay);
+  const _paRCD=document.getElementById('paRevCompDay');
+  const revCutDay=_paRCD&&_paRCD.value?+_paRCD.value:(F.d2?+F.d2:cutDay);
   buildPARevCompTable(data, ms, revCutDay);
 }
 
