@@ -2172,107 +2172,143 @@ async function startApp(session){
 // ══════════════════════════════════════
 let _paData=null;
 
+// ── Fetch dedicado para la tabla personal_account ──
+async function fetchPA(){
+  let rows=[], from=0;
+  while(true){
+    let q=SB.from('personal_account').select('*');
+    if(F.from) q=q.gte('date',F.from);
+    if(F.to)   q=q.lte('date',F.to);
+    if(F.d1)   q=q.gte('dia',+F.d1);
+    if(F.d2)   q=q.lte('dia',+F.d2);
+    if(F.cli)  q=q.eq('client',F.cli);
+    if(F.plat&&F.plat.length){
+      const rawVals=F.plat.flatMap(norm=>normToRaw[norm]||[norm]);
+      q=q.in('platform',rawVals);
+    }
+    q=q.range(from,from+4998);
+    const {data,error}=await q;
+    if(error){console.error('personal_account fetch error:',error);break;}
+    if(!data?.length) break;
+    rows=rows.concat(data);
+    if(data.length<4999) break;
+    from+=4999;
+  }
+  return rows;
+}
+
+// ── Helpers para acceso flexible a columnas ──
+// Intentan varios nombres posibles para el mismo campo
+const paDeposit = r=>+(r.deposit??r.amount??r.Deposit??r.total_deposit??0);
+const paGross   = r=>+(r.gross??r['Gross Revenue']??r.gross_revenue??r.Gross??0);
+const paCost    = r=>+(r.cost??r['Cost Revenue']??r.cost_revenue??r.Cost??0);
+const paNet     = r=>+(r.net??r.Net??r.net_revenue??0);
+const paMonth   = r=>r['AñoYMes']??r.period??r.month??r.year_month??r.anio_mes??'';
+const paDay     = r=>+(r.dia??r.day??r.day_of_month??1);
+const paPlatform= r=>r.platform??r.Platform??'';
+const sumPA     = (arr,fn)=>arr.reduce((s,r)=>s+fn(r),0);
+
 async function loadPersonalAccount(){
   ['pa-tpv-kpis','pa-tpv-plat','pa-rev-kpis','pa-rev-plat','pa-comp-tbl','pa-rev-comp-tbl'].forEach(id=>{
     const el=document.getElementById(id);
     if(el) el.innerHTML=LD;
   });
 
-  const data=await fetchAll([],false,true);
+  const data=await fetchPA();
   _paData=data;
 
-  const tpvRows=data.filter(r=>r['P&L/FCF']==='TPV');
-  const ms=mons(data), byM=grp(data,'AñoYMes');
-  const tpvByM=grp(tpvRows,'AñoYMes');
+  if(!data.length){
+    ['pa-tpv-kpis','pa-tpv-plat','pa-rev-kpis','pa-rev-plat','pa-comp-tbl','pa-rev-comp-tbl'].forEach(id=>{
+      const el=document.getElementById(id);
+      if(el) el.innerHTML='<div class="empty">Sin datos para el período seleccionado</div>';
+    });
+    return;
+  }
+
+  // Log columnas disponibles (F12 → Console) para diagnóstico
+  console.group('%c📋 personal_account – columnas detectadas','color:#a78bfa;font-weight:700');
+  console.log('Columnas:',Object.keys(data[0]));
+  console.log('Ejemplo fila:',data[0]);
+  console.groupEnd();
+
+  // ── Construir meses desde la columna de período disponible ──
+  const ms=[...new Set(data.map(r=>paMonth(r)).filter(Boolean))].sort((a,b)=>{
+    const[ay,am]=a.split('-').map(Number),[by,bm]=b.split('-').map(Number);return ay!==by?ay-by:am-bm;
+  });
+  const byM=ms.reduce((o,m)=>{o[m]=data.filter(r=>paMonth(r)===m);return o},{});
+  const platforms=[...new Set(data.map(r=>paPlatform(r)).filter(Boolean))].sort();
   const lastM=ms[ms.length-1], prevM=ms[ms.length-2];
-
-  // Day cutoff (default = last day of filter or 31)
   const cutDay=F.d2?+F.d2:31;
-  const fairTpvByM=grp(tpvRows.filter(r=>+r.dia<=cutDay),'AñoYMes');
+  const byMcut=ms.reduce((o,m)=>{o[m]=data.filter(r=>paMonth(r)===m&&paDay(r)<=cutDay);return o},{});
 
-  const totalTpv=sum(tpvRows,'amount');
-  const totalTxn=tpvRows.length;
-  const platforms=uniqs(data,'platform');
+  const totalDep=sumPA(data,paDeposit);
+  const totalTxn=data.length;
+  const lAmt=lastM?sumPA(byMcut[lastM]||[],paDeposit):0;
+  const pAmt=prevM?sumPA(byMcut[prevM]||[],paDeposit):0;
+  const lTxn=lastM?(byMcut[lastM]||[]).length:0;
+  const pTxn=prevM?(byMcut[prevM]||[]).length:0;
 
-  // Variaciones MoM TPV
-  const lAmt=lastM?sum(fairTpvByM[lastM]||[],'amount'):0;
-  const pAmt=prevM?sum(fairTpvByM[prevM]||[],'amount'):0;
-  const lTxn=lastM?(fairTpvByM[lastM]||[]).length:0;
-  const pTxn=prevM?(fairTpvByM[prevM]||[]).length:0;
-
-  // ── KPI TPV ──
+  // ── KPI Depósitos ──
   document.getElementById('pa-tpv-kpis').innerHTML=
-    kcard('Total Deposit','$'+fmt(totalTpv),pct(lAmt,pAmt),'vs mes ant. día '+cutDay,PAL[0])+
+    kcard('Total Deposit','$'+fmt(totalDep),pct(lAmt,pAmt),'vs mes ant. día '+cutDay,PAL[0])+
     kcard('Transacciones',fmtI(totalTxn),pct(lTxn,pTxn),'vs mes anterior',PAL[1])+
     kcard('Plataformas activas',fmtI(platforms.length),null,ms.length+' meses en el período',PAL[2])+
-    kcard('Clientes únicos',fmtI(uniqs(tpvRows,'client').length),null,'Clientes distintos en el período',PAL[3]);
+    kcard('Promedio por TX','$'+fmt(totalTxn?totalDep/totalTxn:0),null,'Deposit promedio',PAL[3]);
 
-  // ── Platform TPV cards ──
+  // ── Platform deposit cards ──
   let tpvPlatHtml='';
   platforms.forEach((p,i)=>{
-    const pRows=tpvRows.filter(r=>r.platform===p);
-    const lP=lastM?sum((fairTpvByM[lastM]||[]).filter(r=>r.platform===p),'amount'):0;
-    const pP=prevM?sum((fairTpvByM[prevM]||[]).filter(r=>r.platform===p),'amount'):0;
-    tpvPlatHtml+=platCard(p,sum(pRows,'amount'),pRows.length,pct(lP,pP),PAL[i%PAL.length]);
+    const pRows=data.filter(r=>paPlatform(r)===p);
+    const lP=lastM?sumPA((byMcut[lastM]||[]).filter(r=>paPlatform(r)===p),paDeposit):0;
+    const pP=prevM?sumPA((byMcut[prevM]||[]).filter(r=>paPlatform(r)===p),paDeposit):0;
+    tpvPlatHtml+=platCard(p,sumPA(pRows,paDeposit),pRows.length,pct(lP,pP),PAL[i%PAL.length]);
   });
   document.getElementById('pa-tpv-plat').innerHTML=tpvPlatHtml||'<div class="empty">Sin plataformas</div>';
 
-  // ── TPV Charts ──
-  lineC('c-pa-tpv-m',ms,[lineDS('TPV',ms.map(m=>sum(tpvByM[m]||[],'amount')),'rgb(34,197,94)',true)]);
-  lineC('c-pa-txn-m',ms,[lineDS('Txns',ms.map(m=>(tpvByM[m]||[]).length),'rgb(167,139,250)',true)],true);
-  barC('c-pa-tpv-plat',platforms,[{label:'TPV',data:platforms.map(p=>sum(tpvRows.filter(r=>r.platform===p),'amount')),backgroundColor:platforms.map((_,i)=>PAL[i%PAL.length]),borderRadius:4}]);
+  // ── Deposit Charts ──
+  lineC('c-pa-tpv-m',ms,[lineDS('Deposit',ms.map(m=>sumPA(byM[m]||[],paDeposit)),'rgb(34,197,94)',true)]);
+  lineC('c-pa-txn-m',ms,[lineDS('Txns',ms.map(m=>(byM[m]||[]).length),'rgb(167,139,250)',true)],true);
+  barC('c-pa-tpv-plat',platforms,[{label:'Deposit',data:platforms.map(p=>sumPA(data.filter(r=>paPlatform(r)===p),paDeposit)),backgroundColor:platforms.map((_,i)=>PAL[i%PAL.length]),borderRadius:4}]);
 
-  // Donut/pie de participación por plataforma
+  // Donut participación por plataforma
   dc('c-pa-tpv-pie');
+  const pieVals=platforms.map(p=>sumPA(data.filter(r=>paPlatform(r)===p),paDeposit));
+  const pieTot=pieVals.reduce((s,v)=>s+v,0);
   CI['c-pa-tpv-pie']=new Chart(document.getElementById('c-pa-tpv-pie'),{
     type:'doughnut',
-    data:{
-      labels:platforms,
-      datasets:[{data:platforms.map(p=>sum(tpvRows.filter(r=>r.platform===p),'amount')),backgroundColor:platforms.map((_,i)=>PAL[i%PAL.length]),borderWidth:1.5,borderColor:'var(--s1)'}]
-    },
-    options:{
-      responsive:true,
-      cutout:'60%',
-      plugins:{
-        legend:{position:'bottom',labels:{font:{size:9},boxWidth:9,padding:8,color:'#8892a4'}},
-        datalabels:{
-          display:ctx=>{const tot=platforms.reduce((s,p)=>s+sum(tpvRows.filter(r=>r.platform===p),'amount'),0);return tot>0&&(ctx.dataset.data[ctx.dataIndex]/tot)>.03;},
-          formatter:(v)=>{const tot=platforms.reduce((s,p)=>s+sum(tpvRows.filter(r=>r.platform===p),'amount'),0);return(v/tot*100).toFixed(1)+'%';},
-          color:'#fff',font:{size:9,weight:'700'}
-        }
-      }
-    },
+    data:{labels:platforms,datasets:[{data:pieVals,backgroundColor:platforms.map((_,i)=>PAL[i%PAL.length]),borderWidth:1.5,borderColor:'var(--s1)'}]},
+    options:{responsive:true,cutout:'60%',plugins:{
+      legend:{position:'bottom',labels:{font:{size:9},boxWidth:9,padding:8,color:'#8892a4'}},
+      datalabels:{display:ctx=>pieTot>0&&(ctx.dataset.data[ctx.dataIndex]/pieTot)>.03,formatter:v=>pieTot>0?(v/pieTot*100).toFixed(1)+'%':'',color:'#fff',font:{size:9,weight:'700'}}
+    }},
     plugins:[ChartDataLabels]
   });
 
-  // ── TPV Comparative periods ──
-  buildPATPVCompTable(tpvRows, ms, cutDay);
+  // ── Deposit comparative periods ──
+  buildPATPVCompTable(data, ms, cutDay);
 
   // ── Revenue KPIs ──
-  const gross=sum(data,'Gross Revenue'), cost=sum(data,'Cost Revenue'), net=sum(data,'Net');
-  const tpvL=tpvRows.filter(r=>r['AñoYMes']===lastM), tpvP=tpvRows.filter(r=>r['AñoYMes']===prevM);
-  const vG=pct(sum(byM[lastM]||[],'Gross Revenue'),sum(byM[prevM]||[],'Gross Revenue'));
-  const vC=pct(sum(byM[lastM]||[],'Cost Revenue'),sum(byM[prevM]||[],'Cost Revenue'));
-  const vN=pct(sum(byM[lastM]||[],'Net'),sum(byM[prevM]||[],'Net'));
+  const gross=sumPA(data,paGross), cost=sumPA(data,paCost), net=sumPA(data,paNet);
+  const lG=lastM?sumPA(byM[lastM]||[],paGross):0, pG=prevM?sumPA(byM[prevM]||[],paGross):0;
+  const lC=lastM?sumPA(byM[lastM]||[],paCost):0,  pC=prevM?sumPA(byM[prevM]||[],paCost):0;
+  const lN=lastM?sumPA(byM[lastM]||[],paNet):0,   pN=prevM?sumPA(byM[prevM]||[],paNet):0;
 
   document.getElementById('pa-rev-kpis').innerHTML=
-    kcard('TPV','$'+fmt(totalTpv),pct(sum(tpvL,'amount'),sum(tpvP,'amount')),'vs mes anterior','#a78bfa')+
-    kcard('Gross Revenue','$'+fmt(gross),vG,'vs mes anterior','#22c55e')+
-    kcard('Cost Revenue','$'+fmt(cost),vC,'vs mes anterior','#ef4444')+
-    kcard('Net Revenue','$'+fmt(net),vN,'Margen: '+((net/(gross||1))*100).toFixed(1)+'%','#60a5fa')+
-    kcard('Total TX',fmtI(totalTxn),pct(tpvL.length,tpvP.length),'vs mes anterior','#22d3ee');
+    kcard('Total Deposit','$'+fmt(totalDep),pct(lAmt,pAmt),'vs mes anterior','#a78bfa')+
+    kcard('Gross Revenue','$'+fmt(gross),pct(lG,pG),'vs mes anterior','#22c55e')+
+    kcard('Cost Revenue','$'+fmt(cost),pct(lC,pC),'vs mes anterior','#ef4444')+
+    kcard('Net Revenue','$'+fmt(net),pct(lN,pN),'Margen: '+((net/(gross||1))*100).toFixed(1)+'%','#60a5fa')+
+    kcard('Txns',fmtI(totalTxn),pct(lTxn,pTxn),'vs mes anterior','#22d3ee');
 
   // ── Revenue Platform cards ──
-  const lastRows=data.filter(r=>r['AñoYMes']===lastM);
-  const prevRows=data.filter(r=>r['AñoYMes']===prevM);
+  const lastRows=data.filter(r=>paMonth(r)===lastM);
+  const prevRows=data.filter(r=>paMonth(r)===prevM);
   let revPlatHtml='';
   platforms.forEach((p,i)=>{
-    const cur=lastRows.filter(r=>r.platform===p);
-    const prv=prevRows.filter(r=>r.platform===p);
-    const g=sum(cur,'Gross Revenue'),c2=sum(cur,'Cost Revenue'),n=sum(cur,'Net');
-    const gp=sum(prv,'Gross Revenue'),np=sum(prv,'Net');
-    const tx=data.filter(r=>r.platform===p&&r['P&L/FCF']==='TPV').length;
-    revPlatHtml+=revPlatCard(p,g,pct(g,gp),c2,n,pct(n,np),tx,PAL[i%PAL.length]);
+    const cur=lastRows.filter(r=>paPlatform(r)===p), prv=prevRows.filter(r=>paPlatform(r)===p);
+    const g=sumPA(cur,paGross),c2=sumPA(cur,paCost),n=sumPA(cur,paNet);
+    const gp=sumPA(prv,paGross),np=sumPA(prv,paNet);
+    revPlatHtml+=revPlatCard(p,g,pct(g,gp),c2,n,pct(n,np),data.filter(r=>paPlatform(r)===p).length,PAL[i%PAL.length]);
   });
   document.getElementById('pa-rev-plat').innerHTML=revPlatHtml||'<div class="empty">Sin datos</div>';
 
@@ -2280,48 +2316,42 @@ async function loadPersonalAccount(){
   dc('c-pa-rev-ov');
   CI['c-pa-rev-ov']=new Chart(document.getElementById('c-pa-rev-ov'),{
     type:'bar',data:{labels:ms,datasets:[
-      {type:'bar',label:'Gross',data:ms.map(m=>sum(byM[m]||[],'Gross Revenue')),backgroundColor:'rgba(34,197,94,.18)',borderColor:'#22c55e',borderWidth:1.5,borderRadius:3},
-      {type:'bar',label:'Cost',data:ms.map(m=>sum(byM[m]||[],'Cost Revenue')),backgroundColor:'rgba(239,68,68,.18)',borderColor:'#ef4444',borderWidth:1.5,borderRadius:3},
-      {type:'line',label:'Net',data:ms.map(m=>sum(byM[m]||[],'Net')),borderColor:'#60a5fa',backgroundColor:'transparent',pointRadius:4,tension:.3}
+      {type:'bar',label:'Gross',data:ms.map(m=>sumPA(byM[m]||[],paGross)),backgroundColor:'rgba(34,197,94,.18)',borderColor:'#22c55e',borderWidth:1.5,borderRadius:3},
+      {type:'bar',label:'Cost',data:ms.map(m=>sumPA(byM[m]||[],paCost)),backgroundColor:'rgba(239,68,68,.18)',borderColor:'#ef4444',borderWidth:1.5,borderRadius:3},
+      {type:'line',label:'Net',data:ms.map(m=>sumPA(byM[m]||[],paNet)),borderColor:'#60a5fa',backgroundColor:'transparent',pointRadius:4,tension:.3}
     ]},
     options:{responsive:true,plugins:{legend:LEGT,datalabels:{display:false}},scales:{y:SY,x:SX}},
     plugins:[ChartDataLabels]
   });
-  barC('c-pa-rev-plat',platforms,[{label:'Gross',data:platforms.map(p=>sum(data.filter(r=>r.platform===p),'Gross Revenue')),backgroundColor:platforms.map((_,i)=>PAL[i%PAL.length]),borderRadius:4}]);
+  barC('c-pa-rev-plat',platforms,[{label:'Gross',data:platforms.map(p=>sumPA(data.filter(r=>paPlatform(r)===p),paGross)),backgroundColor:platforms.map((_,i)=>PAL[i%PAL.length]),borderRadius:4}]);
 
-  // ── Revenue Comparative periods ──
-  const revCutDay=document.getElementById('paRevCompDay')?.value?+document.getElementById('paRevCompDay').value:cutDay;
+  // ── Revenue comparative periods ──
+  const revCutDay=+document.getElementById('paRevCompDay')?.value||(F.d2?+F.d2:cutDay);
   buildPARevCompTable(data, ms, revCutDay);
 }
 
-function buildPATPVCompTable(tpvRows, ms, cutDay){
+function buildPATPVCompTable(data, ms, cutDay){
   const el=document.getElementById('pa-comp-tbl');
   const sub=document.getElementById('pa-comp-subtitle');
-  if(ms.length<1){el.innerHTML='<div class="empty">Sin datos en el período</div>';return;}
-  const byM={};
-  ms.forEach(m=>{byM[m]=tpvRows.filter(r=>r['AñoYMes']===m&&+r.dia<=cutDay)});
-  const allPlats=uniqs(tpvRows,'platform');
+  if(!ms.length){el.innerHTML='<div class="empty">Sin datos en el período</div>';return;}
+  const allPlats=[...new Set(data.map(r=>paPlatform(r)).filter(Boolean))].sort();
+  const byMcut=ms.reduce((o,m)=>{o[m]=data.filter(r=>paMonth(r)===m&&paDay(r)<=cutDay);return o},{});
   if(sub) sub.textContent=ms.join('  ·  ')+`  ·  días 1–${cutDay}`;
   const hasVar=ms.length>=2;
   let html=`<table><thead><tr><th>Plataforma</th>${ms.map(m=>`<th class="r">${m}</th><th class="r">Txns</th>`).join('')}${hasVar?'<th class="r">Var %</th><th class="r">Δ USD</th>':''}</tr></thead><tbody>`;
   const rows=allPlats.map(p=>{
-    const amts=ms.map(m=>sum(byM[m].filter(r=>r.platform===p),'amount'));
-    const txns=ms.map(m=>byM[m].filter(r=>r.platform===p).length);
+    const amts=ms.map(m=>sumPA((byMcut[m]||[]).filter(r=>paPlatform(r)===p),paDeposit));
+    const txns=ms.map(m=>(byMcut[m]||[]).filter(r=>paPlatform(r)===p).length);
     return{p,amts,txns};
   }).sort((a,b)=>b.amts[b.amts.length-1]-a.amts[a.amts.length-1]);
   const totAmts=ms.map((_,i)=>rows.reduce((s,r)=>s+r.amts[i],0));
   const totTxns=ms.map((_,i)=>rows.reduce((s,r)=>s+r.txns[i],0));
   rows.forEach(({p,amts,txns})=>{
-    const n=amts.length;
-    const delta=hasVar?amts[n-1]-amts[n-2]:0;
-    const v=hasVar?pct(amts[n-1],amts[n-2]):null;
-    const vc=v===null?'':v>=0?'vp':'vn';
-    const dc2=delta>=0?'vp':'vn';
+    const n=amts.length,delta=hasVar?amts[n-1]-amts[n-2]:0,v=hasVar?pct(amts[n-1],amts[n-2]):null;
+    const vc=v===null?'':v>=0?'vp':'vn',dc2=delta>=0?'vp':'vn';
     html+=`<tr><td><strong style="font-size:11px">${p}</strong></td>${amts.map((a,i)=>`<td class="r mono"${i<n-1?' style="color:var(--mu)"':''}>$${fmtD(a)}</td><td class="r" style="color:var(--di)">${fmtI(txns[i])}</td>`).join('')}${hasVar?`<td class="r ${vc}">${v===null?'N/A':v.toFixed(1)+'%'}</td><td class="r ${dc2}">${delta>=0?'+$':'-$'}${fmtD(Math.abs(delta))}</td>`:''}</tr>`;
   });
-  const n=totAmts.length;
-  const dTot=hasVar?totAmts[n-1]-totAmts[n-2]:0;
-  const vTot=hasVar?pct(totAmts[n-1],totAmts[n-2]):null;
+  const n=totAmts.length,dTot=hasVar?totAmts[n-1]-totAmts[n-2]:0,vTot=hasVar?pct(totAmts[n-1],totAmts[n-2]):null;
   html+=`<tr style="border-top:1px solid var(--bd2);font-weight:700"><td>Total</td>${totAmts.map((a,i)=>`<td class="r mono"${i<n-1?' style="color:var(--mu)"':''}>$${fmtD(a)}</td><td class="r" style="color:var(--di)">${fmtI(totTxns[i])}</td>`).join('')}${hasVar?`<td class="r ${vTot>=0?'vp':'vn'}">${vTot===null?'N/A':vTot.toFixed(1)+'%'}</td><td class="r ${dTot>=0?'vp':'vn'}">${dTot>=0?'+$':'-$'}${fmtD(Math.abs(dTot))}</td>`:''}</tr>`;
   html+='</tbody></table>';
   el.innerHTML=html;
@@ -2332,9 +2362,9 @@ function buildPARevCompTable(data, ms, cutDay){
   const sub=document.getElementById('pa-rev-comp-subtitle');
   const lastM=ms[ms.length-1], prevM=ms[ms.length-2];
   if(!lastM||!prevM){el.innerHTML='<div class="empty">Necesitas al menos 2 meses de datos</div>';return;}
-  const prevRows=data.filter(r=>r['AñoYMes']===prevM&&+r.dia<=cutDay);
-  const currRows=data.filter(r=>r['AñoYMes']===lastM&&+r.dia<=cutDay);
-  const allPlats=uniqs(data,'platform');
+  const prevRows=data.filter(r=>paMonth(r)===prevM&&paDay(r)<=cutDay);
+  const currRows=data.filter(r=>paMonth(r)===lastM&&paDay(r)<=cutDay);
+  const allPlats=[...new Set(data.map(r=>paPlatform(r)).filter(Boolean))].sort();
   if(sub) sub.textContent=`${prevM} días 1–${cutDay}  vs  ${lastM} días 1–${cutDay}`;
   let html=`<table><thead><tr>
     <th rowspan="2" style="vertical-align:bottom">Plataforma</th>
@@ -2342,30 +2372,30 @@ function buildPARevCompTable(data, ms, cutDay){
     <th colspan="4" class="r" style="border-bottom:1px solid var(--bd2);padding-bottom:4px">${lastM}</th>
     <th colspan="3" class="r" style="border-bottom:1px solid var(--bd2);padding-bottom:4px">Variación</th>
   </tr><tr>
-    <th class="r" style="color:var(--mu)">Gross</th><th class="r" style="color:#ef4444;opacity:.7">Cost</th><th class="r" style="color:var(--mu)">Net</th><th class="r" style="color:var(--di)">Txns</th>
-    <th class="r">Gross</th><th class="r" style="color:#ef4444">Cost</th><th class="r">Net</th><th class="r" style="color:var(--di)">Txns</th>
+    <th class="r" style="color:var(--mu)">Gross</th><th class="r" style="color:#ef4444;opacity:.7">Cost</th><th class="r" style="color:var(--mu)">Net</th><th class="r" style="color:var(--di)">Deposit</th>
+    <th class="r">Gross</th><th class="r" style="color:#ef4444">Cost</th><th class="r">Net</th><th class="r" style="color:var(--di)">Deposit</th>
     <th class="r">Gross %</th><th class="r">Net %</th><th class="r">Delta Net</th>
   </tr></thead><tbody>`;
   const rows=allPlats.map(p=>{
-    const pr=prevRows.filter(r=>r.platform===p), cr=currRows.filter(r=>r.platform===p);
-    return{p,pg:sum(pr,'Gross Revenue'),pc:sum(pr,'Cost Revenue'),pn:sum(pr,'Net'),pt:pr.filter(r=>r['P&L/FCF']==='TPV').length,
-      cg:sum(cr,'Gross Revenue'),cc:sum(cr,'Cost Revenue'),cn:sum(cr,'Net'),ct:cr.filter(r=>r['P&L/FCF']==='TPV').length};
+    const pr=prevRows.filter(r=>paPlatform(r)===p), cr=currRows.filter(r=>paPlatform(r)===p);
+    return{p,pg:sumPA(pr,paGross),pc:sumPA(pr,paCost),pn:sumPA(pr,paNet),pd:sumPA(pr,paDeposit),
+           cg:sumPA(cr,paGross),cc:sumPA(cr,paCost),cn:sumPA(cr,paNet),cd:sumPA(cr,paDeposit)};
   }).sort((a,b)=>b.cg-a.cg);
-  let tpg=0,tpc=0,tpn=0,tpt=0,tcg=0,tcc=0,tcn=0,tct=0;
-  rows.forEach(({p,pg,pc,pn,pt,cg,cc,cn,ct})=>{
-    tpg+=pg;tpc+=pc;tpn+=pn;tpt+=pt;tcg+=cg;tcc+=cc;tcn+=cn;tct+=ct;
+  let tpg=0,tpc=0,tpn=0,tpd=0,tcg=0,tcc=0,tcn=0,tcd=0;
+  rows.forEach(({p,pg,pc,pn,pd,cg,cc,cn,cd})=>{
+    tpg+=pg;tpc+=pc;tpn+=pn;tpd+=pd;tcg+=cg;tcc+=cc;tcn+=cn;tcd+=cd;
     const vG=pct(cg,pg),vN=pct(cn,pn),dN=cn-pn;
     html+=`<tr><td><strong style="font-size:11px">${p}</strong></td>
-      <td class="r mono" style="color:var(--mu)">$${fmt(pg)}</td><td class="r mono" style="color:#ef4444;opacity:.75">$${fmt(pc)}</td><td class="r mono" style="color:var(--mu)">$${fmt(pn)}</td><td class="r" style="color:var(--di)">${fmtI(pt)}</td>
-      <td class="r mono">$${fmt(cg)}</td><td class="r mono" style="color:#ef4444">$${fmt(cc)}</td><td class="r mono">$${fmt(cn)}</td><td class="r" style="color:var(--di)">${fmtI(ct)}</td>
+      <td class="r mono" style="color:var(--mu)">$${fmt(pg)}</td><td class="r mono" style="color:#ef4444;opacity:.75">$${fmt(pc)}</td><td class="r mono" style="color:var(--mu)">$${fmt(pn)}</td><td class="r" style="color:var(--di)">$${fmt(pd)}</td>
+      <td class="r mono">$${fmt(cg)}</td><td class="r mono" style="color:#ef4444">$${fmt(cc)}</td><td class="r mono">$${fmt(cn)}</td><td class="r" style="color:var(--di)">$${fmt(cd)}</td>
       <td class="r ${vG===null?'':vG>=0?'vp':'vn'}">${vG===null?'N/A':vG.toFixed(1)+'%'}</td>
       <td class="r ${vN===null?'':vN>=0?'vp':'vn'}">${vN===null?'N/A':vN.toFixed(1)+'%'}</td>
       <td class="r ${dN>=0?'vp':'vn'}">${dN>=0?'+':''}$${fmt(dN)}</td></tr>`;
   });
   const vGT=pct(tcg,tpg),vNT=pct(tcn,tpn),dNT=tcn-tpn;
   html+=`<tr style="border-top:1px solid var(--bd2);font-weight:700"><td>Total</td>
-    <td class="r mono" style="color:var(--mu)">$${fmt(tpg)}</td><td class="r mono" style="color:#ef4444;opacity:.75">$${fmt(tpc)}</td><td class="r mono" style="color:var(--mu)">$${fmt(tpn)}</td><td class="r" style="color:var(--di)">${fmtI(tpt)}</td>
-    <td class="r mono">$${fmt(tcg)}</td><td class="r mono" style="color:#ef4444">$${fmt(tcc)}</td><td class="r mono">$${fmt(tcn)}</td><td class="r" style="color:var(--di)">${fmtI(tct)}</td>
+    <td class="r mono" style="color:var(--mu)">$${fmt(tpg)}</td><td class="r mono" style="color:#ef4444;opacity:.75">$${fmt(tpc)}</td><td class="r mono" style="color:var(--mu)">$${fmt(tpn)}</td><td class="r" style="color:var(--di)">$${fmt(tpd)}</td>
+    <td class="r mono">$${fmt(tcg)}</td><td class="r mono" style="color:#ef4444">$${fmt(tcc)}</td><td class="r mono">$${fmt(tcn)}</td><td class="r" style="color:var(--di)">$${fmt(tcd)}</td>
     <td class="r ${vGT===null?'':vGT>=0?'vp':'vn'}">${vGT===null?'N/A':vGT.toFixed(1)+'%'}</td>
     <td class="r ${vNT===null?'':vNT>=0?'vp':'vn'}">${vNT===null?'N/A':vNT.toFixed(1)+'%'}</td>
     <td class="r ${dNT>=0?'vp':'vn'}">${dNT>=0?'+':''}$${fmt(dNT)}</td></tr>`;
@@ -2375,16 +2405,20 @@ function buildPARevCompTable(data, ms, cutDay){
 
 function refreshPAComp(){
   if(!_paData) return;
-  const inp=document.getElementById('paCompDay');
-  const day=inp.value?+inp.value:(F.d2?+F.d2:31);
-  buildPATPVCompTable(_paData.filter(r=>r['P&L/FCF']==='TPV'), mons(_paData), day);
+  const day=+document.getElementById('paCompDay').value||(F.d2?+F.d2:31);
+  const ms=[...new Set(_paData.map(r=>paMonth(r)).filter(Boolean))].sort((a,b)=>{
+    const[ay,am]=a.split('-').map(Number),[by,bm]=b.split('-').map(Number);return ay!==by?ay-by:am-bm;
+  });
+  buildPATPVCompTable(_paData,ms,day);
 }
 
 function refreshPARevComp(){
   if(!_paData) return;
-  const inp=document.getElementById('paRevCompDay');
-  const day=inp.value?+inp.value:(F.d2?+F.d2:31);
-  buildPARevCompTable(_paData, mons(_paData), day);
+  const day=+document.getElementById('paRevCompDay').value||(F.d2?+F.d2:31);
+  const ms=[...new Set(_paData.map(r=>paMonth(r)).filter(Boolean))].sort((a,b)=>{
+    const[ay,am]=a.split('-').map(Number),[by,bm]=b.split('-').map(Number);return ay!==by?ay-by:am-bm;
+  });
+  buildPARevCompTable(_paData,ms,day);
 }
 
 SB.auth.onAuthStateChange(async(event,session)=>{
