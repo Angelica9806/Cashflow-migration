@@ -266,6 +266,12 @@ tbody tr:hover td{background:rgba(255,255,255,.025)}
 .pag-btn:disabled{opacity:.35;cursor:default}
 .sort-th{cursor:pointer;user-select:none}
 .sort-th:hover{color:var(--tx)}
+
+/* ── Personal Account Tab ── */
+.pa-section-sep{display:flex;align-items:center;gap:10px;margin:24px 0 14px;padding-bottom:10px;border-bottom:1px solid var(--bd)}
+.pa-sep-icon{width:26px;height:26px;border-radius:7px;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.pa-sep-title{font-size:13px;font-weight:800;color:var(--tx);letter-spacing:-.2px}
+.pa-sep-sub{font-size:10px;color:var(--mu);margin-top:1px}
 </style>
 </head>
 <body>
@@ -324,6 +330,10 @@ tbody tr:hover td{background:rgba(255,255,255,.025)}
   <a class="sb-link" data-tab="approval">
     <svg viewBox="0 0 15 15" fill="none"><circle cx="7.5" cy="7.5" r="5.5" stroke="currentColor" stroke-width="1.4"/><path d="M7.5 4.5v3l2 2" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
     Approval Times
+  </a>
+  <a class="sb-link" data-tab="personal">
+    <svg viewBox="0 0 15 15" fill="none"><circle cx="7.5" cy="4.5" r="2.5" stroke="currentColor" stroke-width="1.4"/><path d="M2.5 13c0-2.76 2.24-5 5-5s5 2.24 5 5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>
+    Personal Account
   </a>
   <div class="sb-footer">
     <div class="sb-av">FO</div>
@@ -421,28 +431,22 @@ tbody tr:hover td{background:rgba(255,255,255,.025)}
     <div class="card"><div class="ch"><div class="ct">Top 10 Clientes</div></div><canvas id="c-top10" height="120"></canvas></div>
   </div>
 
-  <!-- Comparación de períodos + semanal -->
-  <div class="g21">
-    <div class="card mb">
-      <div class="ch">
-        <div>
-          <div class="ct">Comparación de Períodos</div>
-          <div id="comp-subtitle" style="font-size:10px;color:var(--mu);margin-top:2px"></div>
-        </div>
-        <div style="display:flex;gap:6px;align-items:center">
-          <div class="fi" style="flex-direction:row;gap:6px;align-items:center">
-            <label style="font-size:9px;color:var(--di);white-space:nowrap">Hasta día</label>
-            <input type="number" id="compDay" min="1" max="31" style="width:52px;height:26px;padding:0 7px;background:var(--s2);border:1px solid var(--bd2);border-radius:6px;font-size:11px;color:var(--tx);font-family:inherit" placeholder="hoy">
-          </div>
-          <button class="fbtn ok" style="height:26px;font-size:10px" onclick="refreshComp()">OK</button>
-        </div>
+  <!-- Comparación de períodos -->
+  <div class="card mb">
+    <div class="ch">
+      <div>
+        <div class="ct">Comparación de Períodos</div>
+        <div id="comp-subtitle" style="font-size:10px;color:var(--mu);margin-top:2px"></div>
       </div>
-      <div id="comp-tbl"><div class="ld"><div class="sp"></div></div></div>
+      <div style="display:flex;gap:6px;align-items:center">
+        <div class="fi" style="flex-direction:row;gap:6px;align-items:center">
+          <label style="font-size:9px;color:var(--di);white-space:nowrap">Hasta día</label>
+          <input type="number" id="compDay" min="1" max="31" style="width:52px;height:26px;padding:0 7px;background:var(--s2);border:1px solid var(--bd2);border-radius:6px;font-size:11px;color:var(--tx);font-family:inherit" placeholder="hoy">
+        </div>
+        <button class="fbtn ok" style="height:26px;font-size:10px" onclick="refreshComp()">OK</button>
+      </div>
     </div>
-    <div class="card mb">
-      <div class="ch"><div class="ct">TPV por Semana</div></div>
-      <canvas id="c-aw" height="130"></canvas>
-    </div>
+    <div id="comp-tbl" style="overflow-x:auto"><div class="ld"><div class="sp"></div></div></div>
   </div>
 
   <!-- Pivot table (ignora filtro plataforma — muestra todo) -->
@@ -485,6 +489,24 @@ tbody tr:hover td{background:rgba(255,255,255,.025)}
     <div class="card"><div class="ch"><div class="ct">Gross / Cost / Net – Consolidado</div></div><canvas id="c-rev-ov" height="140"></canvas></div>
     <div class="card"><div class="ch"><div class="ct">Gross Revenue por Plataforma</div></div><canvas id="c-rev-plat" height="140"></canvas></div>
   </div>
+  <!-- Comparación de períodos Revenue -->
+  <div class="card mb">
+    <div class="ch">
+      <div>
+        <div class="ct">Comparación de Períodos – Gross / Cost / Net</div>
+        <div id="rev-comp-subtitle" style="font-size:10px;color:var(--mu);margin-top:2px"></div>
+      </div>
+      <div style="display:flex;gap:6px;align-items:center">
+        <div class="fi" style="flex-direction:row;gap:6px;align-items:center">
+          <label style="font-size:9px;color:var(--di);white-space:nowrap">Hasta día</label>
+          <input type="number" id="revCompDay" min="1" max="31" style="width:52px;height:26px;padding:0 7px;background:var(--s2);border:1px solid var(--bd2);border-radius:6px;font-size:11px;color:var(--tx);font-family:inherit" placeholder="hoy">
+        </div>
+        <button class="fbtn ok" style="height:26px;font-size:10px" onclick="refreshRevComp()">OK</button>
+      </div>
+    </div>
+    <div class="tw" id="rev-comp-tbl"><div class="ld"><div class="sp"></div></div></div>
+  </div>
+
   <div id="rev-blocks"><div class="ld"><div class="sp"></div>Cargando plataformas…</div></div>
 </div>
 
@@ -504,6 +526,100 @@ tbody tr:hover td{background:rgba(255,255,255,.025)}
   <div class="card mb"><div class="ch"><div class="ct">Follow-up Mensual – USD</div></div><div class="tw" id="cli-tbl"><div class="ld"><div class="sp"></div></div></div></div>
 </div>
 
+
+<!-- ═══════ TAB: PERSONAL ACCOUNT ═══════ -->
+<div class="tab" id="tab-personal">
+  <div class="sec">
+    <div class="sec-icon" style="background:linear-gradient(135deg,rgba(167,139,250,.2),rgba(96,165,250,.1));border:1px solid rgba(167,139,250,.3)">
+      <svg viewBox="0 0 18 18" fill="none" width="18" height="18"><circle cx="9" cy="6" r="3.2" stroke="#a78bfa" stroke-width="1.6"/><path d="M2.5 16c0-3.59 2.91-6.5 6.5-6.5s6.5 2.91 6.5 6.5" stroke="#a78bfa" stroke-width="1.6" stroke-linecap="round"/></svg>
+    </div>
+    <div><h2>Personal Account</h2><p id="pa-subtitle">TPV & Revenue consolidado · Vista por plataforma con períodos comparativos</p></div>
+  </div>
+
+  <!-- ══ SECCIÓN TPV ══ -->
+  <div class="pa-section-sep">
+    <div class="pa-sep-icon" style="background:var(--grb)">
+      <svg viewBox="0 0 15 15" fill="none" width="14" height="14"><path d="M1.5 11L5 7l3 3 5.5-6.5" stroke="#22c55e" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    </div>
+    <div>
+      <div class="pa-sep-title">TPV – Total Payment Volume</div>
+      <div class="pa-sep-sub">Depósitos totales · Desglose por plataforma</div>
+    </div>
+  </div>
+
+  <!-- Total Deposit + KPI cards -->
+  <div class="krow" id="pa-tpv-kpis"><div class="ld"><div class="sp"></div>Cargando…</div></div>
+
+  <!-- Platform breakdown cards -->
+  <div class="plat-row" id="pa-tpv-plat"><div class="ld"><div class="sp"></div></div></div>
+
+  <!-- TPV Charts -->
+  <div class="g4" style="margin-bottom:13px">
+    <div class="card"><div class="ch"><div class="ct">TPV por Mes</div></div><canvas id="c-pa-tpv-m" height="120"></canvas></div>
+    <div class="card"><div class="ch"><div class="ct">Txns por Mes</div></div><canvas id="c-pa-txn-m" height="120"></canvas></div>
+    <div class="card"><div class="ch"><div class="ct">TPV por Plataforma</div></div><canvas id="c-pa-tpv-plat" height="120"></canvas></div>
+    <div class="card"><div class="ch"><div class="ct">Participación por Plataforma</div></div><canvas id="c-pa-tpv-pie" height="120"></canvas></div>
+  </div>
+
+  <!-- TPV Comparative periods -->
+  <div class="card mb">
+    <div class="ch">
+      <div>
+        <div class="ct">Comparación de Períodos – TPV</div>
+        <div id="pa-comp-subtitle" style="font-size:10px;color:var(--mu);margin-top:2px"></div>
+      </div>
+      <div style="display:flex;gap:6px;align-items:center">
+        <div class="fi" style="flex-direction:row;gap:6px;align-items:center">
+          <label style="font-size:9px;color:var(--di);white-space:nowrap">Hasta día</label>
+          <input type="number" id="paCompDay" min="1" max="31" style="width:52px;height:26px;padding:0 7px;background:var(--s2);border:1px solid var(--bd2);border-radius:6px;font-size:11px;color:var(--tx);font-family:inherit" placeholder="hoy">
+        </div>
+        <button class="fbtn ok" style="height:26px;font-size:10px" onclick="refreshPAComp()">OK</button>
+      </div>
+    </div>
+    <div id="pa-comp-tbl" style="overflow-x:auto"><div class="ld"><div class="sp"></div></div></div>
+  </div>
+
+  <!-- ══ SECCIÓN REVENUE ══ -->
+  <div class="pa-section-sep">
+    <div class="pa-sep-icon" style="background:var(--blb)">
+      <svg viewBox="0 0 15 15" fill="none" width="14" height="14"><rect x="1.5" y="3.5" width="12" height="9" rx="1.5" stroke="#60a5fa" stroke-width="1.4"/><path d="M1.5 7h12" stroke="#60a5fa" stroke-width="1.2"/><circle cx="7.5" cy="10" r="1.2" fill="#60a5fa"/></svg>
+    </div>
+    <div>
+      <div class="pa-sep-title">Revenue</div>
+      <div class="pa-sep-sub">Gross · Cost · Net por plataforma</div>
+    </div>
+  </div>
+
+  <!-- Revenue KPI cards -->
+  <div class="krow r5" id="pa-rev-kpis"><div class="ld"><div class="sp"></div>Cargando…</div></div>
+
+  <!-- Revenue Platform cards -->
+  <div class="plat-row" id="pa-rev-plat"><div class="ld"><div class="sp"></div></div></div>
+
+  <!-- Revenue Charts -->
+  <div class="g2 mb">
+    <div class="card"><div class="ch"><div class="ct">Gross / Cost / Net – Consolidado</div></div><canvas id="c-pa-rev-ov" height="140"></canvas></div>
+    <div class="card"><div class="ch"><div class="ct">Gross Revenue por Plataforma</div></div><canvas id="c-pa-rev-plat" height="140"></canvas></div>
+  </div>
+
+  <!-- Revenue Comparative periods -->
+  <div class="card mb">
+    <div class="ch">
+      <div>
+        <div class="ct">Comparación de Períodos – Revenue</div>
+        <div id="pa-rev-comp-subtitle" style="font-size:10px;color:var(--mu);margin-top:2px"></div>
+      </div>
+      <div style="display:flex;gap:6px;align-items:center">
+        <div class="fi" style="flex-direction:row;gap:6px;align-items:center">
+          <label style="font-size:9px;color:var(--di);white-space:nowrap">Hasta día</label>
+          <input type="number" id="paRevCompDay" min="1" max="31" style="width:52px;height:26px;padding:0 7px;background:var(--s2);border:1px solid var(--bd2);border-radius:6px;font-size:11px;color:var(--tx);font-family:inherit" placeholder="hoy">
+        </div>
+        <button class="fbtn ok" style="height:26px;font-size:10px" onclick="refreshPARevComp()">OK</button>
+      </div>
+    </div>
+    <div class="tw" id="pa-rev-comp-tbl"><div class="ld"><div class="sp"></div></div></div>
+  </div>
+</div>
 
 <!-- ═══════ TAB: APPROVAL TIMES ═══════ -->
 <div class="tab" id="tab-approval">
@@ -652,6 +768,7 @@ function acHide(id){setTimeout(()=>{const d=document.getElementById(id+'-drop');
 const fmt  = (n,d=1)=>{n=+n||0;if(Math.abs(n)>=1e9)return(n/1e9).toFixed(d)+'B';if(Math.abs(n)>=1e6)return(n/1e6).toFixed(d)+'M';if(Math.abs(n)>=1e3)return(n/1e3).toFixed(d)+'K';return n.toFixed(d)};
 const fmtN = n=>new Intl.NumberFormat('en-US',{minimumFractionDigits:2,maximumFractionDigits:2}).format(+n||0);
 const fmtI = n=>new Intl.NumberFormat('en-US').format(parseInt(n)||0);
+const fmtD = n=>new Intl.NumberFormat('en-US',{minimumFractionDigits:0,maximumFractionDigits:0}).format(Math.round(+n||0));
 const sum  = (a,f)=>a.reduce((s,r)=>s+(+r[f]||0),0);
 const grp  = (a,k)=>a.reduce((o,r)=>{const v=r[k];(o[v]=o[v]||[]).push(r);return o},{});
 const mons = d=>[...new Set(d.map(r=>r['AñoYMes']).filter(Boolean))].sort((a,b)=>{
@@ -874,6 +991,7 @@ function loadTab(t){
   if(t==='revenue')  return loadRevenue();
   if(t==='clientes') return loadClientes();
   if(t==='approval') return loadApproval();
+  if(t==='personal') return loadPersonalAccount();
 }
 
 // ══════════════════════════════════════
@@ -1019,8 +1137,8 @@ async function loadOverview(){
   const total=sum(data,'amount'), txn=data.length;
   const lastM=ms[ms.length-1], prevM=ms[ms.length-2];
 
-  // Day cutoff para comparación justa MoM
-  const cutDay=F.d2?+F.d2:new Date().getDate();
+  // Day cutoff para comparación justa MoM (default 31 = mes completo)
+  const cutDay=F.d2?+F.d2:31;
   const fairByM=grp(data.filter(r=>+r.dia<=cutDay),'AñoYMes');
 
   // Variaciones vs mes anterior (mismo rango de días)
@@ -1055,7 +1173,6 @@ async function loadOverview(){
   // ── Charts ──
   lineC('c-am',ms,[lineDS('TPV',ms.map(m=>sum(byM[m]||[],'amount')),'rgb(34,197,94)',true)]);
   lineC('c-tm',ms,[lineDS('Txns',ms.map(m=>(byM[m]||[]).length),'rgb(96,165,250)',true)],true);
-  barC('c-aw',ms,['Week 1','Week 2','Week 3','Week 4'].map((w,i)=>({label:w,data:ms.map(m=>sum((byM[m]||[]).filter(r=>r.week===w),'amount')),backgroundColor:WKC[i],borderRadius:3})),{stacked:true});
   barC('c-plat',platforms,[{label:'TPV',data:platforms.map(p=>sum(data.filter(r=>r.platform===p),'amount')),backgroundColor:platforms.map((_,i)=>PAL[i%PAL.length]),borderRadius:4}]);
   const byCli=grp(data,'client');
   const top10=Object.entries(byCli).map(([c,rs])=>({id:c,amt:sum(rs,'amount')})).sort((a,b)=>b.amt-a.amt).slice(0,10);
@@ -1083,53 +1200,37 @@ async function loadOverview(){
   document.getElementById('pivot-tbl').innerHTML=pv;
 }
 
-// ── Comparación de Períodos: mes anterior vs mes actual hasta día X ──
+// ── Comparación de Períodos: todos los meses del rango hasta día X ──
 function buildCompTable(data, ms, cutDay){
-  const lastM=ms[ms.length-1], prevM=ms[ms.length-2];
-  if(!lastM||!prevM){
-    document.getElementById('comp-tbl').innerHTML='<div class="empty">Necesitas al menos 2 meses de datos</div>';
+  if(ms.length<1){
+    document.getElementById('comp-tbl').innerHTML='<div class="empty">Sin datos en el período</div>';
     return;
   }
-  const prevRows=data.filter(r=>r['AñoYMes']===prevM&&+r.dia<=cutDay);
-  const currRows=data.filter(r=>r['AñoYMes']===lastM&&+r.dia<=cutDay);
+  const byM={};
+  ms.forEach(m=>{byM[m]=data.filter(r=>r['AñoYMes']===m&&+r.dia<=cutDay)});
   const allPlats=uniqs(data,'platform');
-  document.getElementById('comp-subtitle').textContent=`${prevM} días 1–${cutDay}  vs  ${lastM} días 1–${cutDay}`;
-  let html=`<table>
-    <thead><tr>
-      <th>Plataforma</th>
-      <th class="r">${prevM}</th><th class="r">Txns</th>
-      <th class="r">${lastM}</th><th class="r">Txns</th>
-      <th class="r">Var %</th><th class="r">Δ USD</th>
-    </tr></thead><tbody>`;
-  const rows=allPlats.map(p=>({
-    p,
-    pa:sum(prevRows.filter(r=>r.platform===p),'amount'),
-    pt:prevRows.filter(r=>r.platform===p).length,
-    ca:sum(currRows.filter(r=>r.platform===p),'amount'),
-    ct:currRows.filter(r=>r.platform===p).length
-  })).sort((a,b)=>b.ca-a.ca);
-  let totPa=0,totPt=0,totCa=0,totCt=0;
-  rows.forEach(({p,pa,pt,ca,ct})=>{
-    totPa+=pa;totPt+=pt;totCa+=ca;totCt+=ct;
-    const v=pct(ca,pa),delta=ca-pa;
+  document.getElementById('comp-subtitle').textContent=ms.join('  ·  ')+`  ·  días 1–${cutDay}`;
+  const hasVar=ms.length>=2;
+  let html=`<table><thead><tr><th>Plataforma</th>${ms.map(m=>`<th class="r">${m}</th><th class="r">Txns</th>`).join('')}${hasVar?'<th class="r">Var %</th><th class="r">Δ USD</th>':''}</tr></thead><tbody>`;
+  const rows=allPlats.map(p=>{
+    const amts=ms.map(m=>sum(byM[m].filter(r=>r.platform===p),'amount'));
+    const txns=ms.map(m=>byM[m].filter(r=>r.platform===p).length);
+    return{p,amts,txns};
+  }).sort((a,b)=>b.amts[b.amts.length-1]-a.amts[a.amts.length-1]);
+  const totAmts=ms.map((_,i)=>rows.reduce((s,r)=>s+r.amts[i],0));
+  const totTxns=ms.map((_,i)=>rows.reduce((s,r)=>s+r.txns[i],0));
+  rows.forEach(({p,amts,txns})=>{
+    const n=amts.length;
+    const delta=hasVar?amts[n-1]-amts[n-2]:0;
+    const v=hasVar?pct(amts[n-1],amts[n-2]):null;
     const vc=v===null?'':v>=0?'vp':'vn';
-    const dc2=delta>=0?'vp':'vn';
-    html+=`<tr>
-      <td><strong style="font-size:11px">${p}</strong></td>
-      <td class="r mono" style="color:var(--mu)">$${fmt(pa)}</td><td class="r" style="color:var(--di)">${fmtI(pt)}</td>
-      <td class="r mono">$${fmt(ca)}</td><td class="r" style="color:var(--di)">${fmtI(ct)}</td>
-      <td class="r ${vc}">${v===null?'N/A':v.toFixed(1)+'%'}</td>
-      <td class="r ${dc2}">${delta>=0?'+':''}$${fmt(delta)}</td>
-    </tr>`;
+    const dc=delta>=0?'vp':'vn';
+    html+=`<tr><td><strong style="font-size:11px">${p}</strong></td>${amts.map((a,i)=>`<td class="r mono"${i<n-1?' style="color:var(--mu)"':''}>$${fmtD(a)}</td><td class="r" style="color:var(--di)">${fmtI(txns[i])}</td>`).join('')}${hasVar?`<td class="r ${vc}">${v===null?'N/A':v.toFixed(1)+'%'}</td><td class="r ${dc}">${delta>=0?'+$':'-$'}${fmtD(Math.abs(delta))}</td>`:''}</tr>`;
   });
-  const vTot=pct(totCa,totPa),dTot=totCa-totPa;
-  html+=`<tr style="border-top:1px solid var(--bd2);font-weight:700">
-    <td>Total</td>
-    <td class="r mono" style="color:var(--mu)">$${fmt(totPa)}</td><td class="r" style="color:var(--di)">${fmtI(totPt)}</td>
-    <td class="r mono">$${fmt(totCa)}</td><td class="r" style="color:var(--di)">${fmtI(totCt)}</td>
-    <td class="r ${vTot>=0?'vp':'vn'}">${vTot===null?'N/A':vTot.toFixed(1)+'%'}</td>
-    <td class="r ${dTot>=0?'vp':'vn'}">${dTot>=0?'+':''}$${fmt(dTot)}</td>
-  </tr>`;
+  const n=totAmts.length;
+  const dTot=hasVar?totAmts[n-1]-totAmts[n-2]:0;
+  const vTot=hasVar?pct(totAmts[n-1],totAmts[n-2]):null;
+  html+=`<tr style="border-top:1px solid var(--bd2);font-weight:700"><td>Total</td>${totAmts.map((a,i)=>`<td class="r mono"${i<n-1?' style="color:var(--mu)"':''}>$${fmtD(a)}</td><td class="r" style="color:var(--di)">${fmtI(totTxns[i])}</td>`).join('')}${hasVar?`<td class="r ${vTot>=0?'vp':'vn'}">${vTot===null?'N/A':vTot.toFixed(1)+'%'}</td><td class="r ${dTot>=0?'vp':'vn'}">${dTot>=0?'+$':'-$'}${fmtD(Math.abs(dTot))}</td>`:''}</tr>`;
   html+='</tbody></table>';
   document.getElementById('comp-tbl').innerHTML=html;
 }
@@ -1137,7 +1238,7 @@ function buildCompTable(data, ms, cutDay){
 function refreshComp(){
   if(!_ovData) return;
   const inp=document.getElementById('compDay');
-  const day=inp.value?+inp.value:(F.d2?+F.d2:new Date().getDate());
+  const day=inp.value?+inp.value:(F.d2?+F.d2:31);
   const ms=mons(_ovData);
   buildCompTable(_ovData,ms,day);
 }
@@ -1225,11 +1326,14 @@ async function loadVRN(){
 // ══════════════════════════════════════
 // REVENUE TAB
 // ══════════════════════════════════════
+let _revData=null;
 async function loadRevenue(){
   document.getElementById('rev-kpis').innerHTML=LD;
   document.getElementById('rev-plat-cards').innerHTML=LD;
+  document.getElementById('rev-comp-tbl').innerHTML=LD;
   document.getElementById('rev-blocks').innerHTML=LD;
   const data=await fetchAll([],false,true);
+  _revData=data;
   const tpvRows=data.filter(r=>r['P&L/FCF']==='TPV');
   const gross=sum(data,'Gross Revenue'),cost=sum(data,'Cost Revenue'),net=sum(data,'Net'),tpv=sum(tpvRows,'amount');
   const totalTX=tpvRows.length;
@@ -1261,6 +1365,11 @@ async function loadRevenue(){
     platCardsHtml+=revPlatCard(p,g,pct(g,gp),c2,n,pct(n,np),tx,PAL[i%PAL.length]);
   });
   document.getElementById('rev-plat-cards').innerHTML=platCardsHtml||'<div class="empty">Sin datos</div>';
+
+  // Comparison table
+  const revCompDay=document.getElementById('revCompDay');
+  const cutDay=revCompDay&&revCompDay.value?+revCompDay.value:(F.d2?+F.d2:new Date().getDate());
+  buildRevCompTable(data,ms,cutDay);
 
   document.getElementById('rev-blocks').innerHTML=`<div id="rev-plat-charts"></div>`;
 
@@ -1333,6 +1442,56 @@ async function loadRevenue(){
     const el2=document.getElementById('rv-w-'+bid);
     if(el2){dc('rv-w-'+bid);CI['rv-w-'+bid]=new Chart(el2,{type:'bar',data:{labels:ms,datasets:['Week 1','Week 2','Week 3','Week 4'].map((w,i)=>({label:w,data:ms.map(m=>sum((byPM[m]||[]).filter(r=>r.week===w),'amount')),backgroundColor:WKC[i],borderRadius:2}))},options:{responsive:true,plugins:{legend:{...LEG,labels:{...LEG.labels,font:{size:8},boxWidth:8}},datalabels:{display:ctx=>(ctx.dataset.data[ctx.dataIndex]||0)>0,formatter:v=>fmt(v),color:'#fff',font:{size:7,weight:'700'},anchor:'center',align:'center'}},scales:{y:SY,x:SX}},plugins:[ChartDataLabels]})}
   });
+}
+
+function buildRevCompTable(data,ms,cutDay){
+  const lastM=ms[ms.length-1],prevM=ms[ms.length-2];
+  if(!lastM||!prevM){document.getElementById('rev-comp-tbl').innerHTML='<div class="empty">Necesitas al menos 2 meses de datos</div>';return;}
+  const prevRows=data.filter(r=>r['AñoYMes']===prevM&&+r.dia<=cutDay);
+  const currRows=data.filter(r=>r['AñoYMes']===lastM&&+r.dia<=cutDay);
+  const allPlats=uniqs(data,'platform');
+  document.getElementById('rev-comp-subtitle').textContent=`${prevM} días 1–${cutDay}  vs  ${lastM} días 1–${cutDay}`;
+  let html=`<table><thead><tr>
+    <th rowspan="2" style="vertical-align:bottom">Plataforma</th>
+    <th colspan="4" class="r" style="color:var(--mu);border-bottom:1px solid var(--bd2);padding-bottom:4px">${prevM}</th>
+    <th colspan="4" class="r" style="border-bottom:1px solid var(--bd2);padding-bottom:4px">${lastM}</th>
+    <th colspan="3" class="r" style="border-bottom:1px solid var(--bd2);padding-bottom:4px">Variacion</th>
+  </tr><tr>
+    <th class="r" style="color:var(--mu)">Gross</th><th class="r" style="color:#ef4444;opacity:.7">Cost</th><th class="r" style="color:var(--mu)">Net</th><th class="r" style="color:var(--di)">Txns</th>
+    <th class="r">Gross</th><th class="r" style="color:#ef4444">Cost</th><th class="r">Net</th><th class="r" style="color:var(--di)">Txns</th>
+    <th class="r">Gross %</th><th class="r">Net %</th><th class="r">Delta Net</th>
+  </tr></thead><tbody>`;
+  const rows=allPlats.map(p=>{
+    const pr=prevRows.filter(r=>r.platform===p),cr=currRows.filter(r=>r.platform===p);
+    return{p,pg:sum(pr,'Gross Revenue'),pc:sum(pr,'Cost Revenue'),pn:sum(pr,'Net'),pt:pr.filter(r=>r['P&L/FCF']==='TPV').length,
+      cg:sum(cr,'Gross Revenue'),cc:sum(cr,'Cost Revenue'),cn:sum(cr,'Net'),ct:cr.filter(r=>r['P&L/FCF']==='TPV').length};
+  }).sort((a,b)=>b.cg-a.cg);
+  let tpg=0,tpc=0,tpn=0,tpt=0,tcg=0,tcc=0,tcn=0,tct=0;
+  rows.forEach(({p,pg,pc,pn,pt,cg,cc,cn,ct})=>{
+    tpg+=pg;tpc+=pc;tpn+=pn;tpt+=pt;tcg+=cg;tcc+=cc;tcn+=cn;tct+=ct;
+    const vG=pct(cg,pg),vN=pct(cn,pn),dN=cn-pn;
+    html+=`<tr><td><strong style="font-size:11px">${p}</strong></td>
+      <td class="r mono" style="color:var(--mu)">$${fmt(pg)}</td><td class="r mono" style="color:#ef4444;opacity:.75">$${fmt(pc)}</td><td class="r mono" style="color:var(--mu)">$${fmt(pn)}</td><td class="r" style="color:var(--di)">${fmtI(pt)}</td>
+      <td class="r mono">$${fmt(cg)}</td><td class="r mono" style="color:#ef4444">$${fmt(cc)}</td><td class="r mono">$${fmt(cn)}</td><td class="r" style="color:var(--di)">${fmtI(ct)}</td>
+      <td class="r ${vG===null?'':vG>=0?'vp':'vn'}">${vG===null?'N/A':vG.toFixed(1)+'%'}</td>
+      <td class="r ${vN===null?'':vN>=0?'vp':'vn'}">${vN===null?'N/A':vN.toFixed(1)+'%'}</td>
+      <td class="r ${dN>=0?'vp':'vn'}">${dN>=0?'+':''}$${fmt(dN)}</td></tr>`;
+  });
+  const vGT=pct(tcg,tpg),vNT=pct(tcn,tpn),dNT=tcn-tpn;
+  html+=`<tr style="border-top:1px solid var(--bd2);font-weight:700"><td>Total</td>
+    <td class="r mono" style="color:var(--mu)">$${fmt(tpg)}</td><td class="r mono" style="color:#ef4444;opacity:.75">$${fmt(tpc)}</td><td class="r mono" style="color:var(--mu)">$${fmt(tpn)}</td><td class="r" style="color:var(--di)">${fmtI(tpt)}</td>
+    <td class="r mono">$${fmt(tcg)}</td><td class="r mono" style="color:#ef4444">$${fmt(tcc)}</td><td class="r mono">$${fmt(tcn)}</td><td class="r" style="color:var(--di)">${fmtI(tct)}</td>
+    <td class="r ${vGT===null?'':vGT>=0?'vp':'vn'}">${vGT===null?'N/A':vGT.toFixed(1)+'%'}</td>
+    <td class="r ${vNT===null?'':vNT>=0?'vp':'vn'}">${vNT===null?'N/A':vNT.toFixed(1)+'%'}</td>
+    <td class="r ${dNT>=0?'vp':'vn'}">${dNT>=0?'+':''}$${fmt(dNT)}</td></tr>`;
+  html+='</tbody></table>';
+  document.getElementById('rev-comp-tbl').innerHTML=html;
+}
+function refreshRevComp(){
+  if(!_revData) return;
+  const inp=document.getElementById('revCompDay');
+  const day=inp.value?+inp.value:(F.d2?+F.d2:31);
+  buildRevCompTable(_revData,mons(_revData),day);
 }
 
 // ══════════════════════════════════════
@@ -2006,6 +2165,226 @@ async function startApp(session){
   if(atToEl&&!atToEl.value)     atToEl.value=now.toISOString().slice(0,10);
   await loadFilters();
   loadOverview();
+}
+
+// ══════════════════════════════════════
+// PERSONAL ACCOUNT TAB
+// ══════════════════════════════════════
+let _paData=null;
+
+async function loadPersonalAccount(){
+  ['pa-tpv-kpis','pa-tpv-plat','pa-rev-kpis','pa-rev-plat','pa-comp-tbl','pa-rev-comp-tbl'].forEach(id=>{
+    const el=document.getElementById(id);
+    if(el) el.innerHTML=LD;
+  });
+
+  const data=await fetchAll([],false,true);
+  _paData=data;
+
+  const tpvRows=data.filter(r=>r['P&L/FCF']==='TPV');
+  const ms=mons(data), byM=grp(data,'AñoYMes');
+  const tpvByM=grp(tpvRows,'AñoYMes');
+  const lastM=ms[ms.length-1], prevM=ms[ms.length-2];
+
+  // Day cutoff (default = last day of filter or 31)
+  const cutDay=F.d2?+F.d2:31;
+  const fairTpvByM=grp(tpvRows.filter(r=>+r.dia<=cutDay),'AñoYMes');
+
+  const totalTpv=sum(tpvRows,'amount');
+  const totalTxn=tpvRows.length;
+  const platforms=uniqs(data,'platform');
+
+  // Variaciones MoM TPV
+  const lAmt=lastM?sum(fairTpvByM[lastM]||[],'amount'):0;
+  const pAmt=prevM?sum(fairTpvByM[prevM]||[],'amount'):0;
+  const lTxn=lastM?(fairTpvByM[lastM]||[]).length:0;
+  const pTxn=prevM?(fairTpvByM[prevM]||[]).length:0;
+
+  // ── KPI TPV ──
+  document.getElementById('pa-tpv-kpis').innerHTML=
+    kcard('Total Deposit','$'+fmt(totalTpv),pct(lAmt,pAmt),'vs mes ant. día '+cutDay,PAL[0])+
+    kcard('Transacciones',fmtI(totalTxn),pct(lTxn,pTxn),'vs mes anterior',PAL[1])+
+    kcard('Plataformas activas',fmtI(platforms.length),null,ms.length+' meses en el período',PAL[2])+
+    kcard('Clientes únicos',fmtI(uniqs(tpvRows,'client').length),null,'Clientes distintos en el período',PAL[3]);
+
+  // ── Platform TPV cards ──
+  let tpvPlatHtml='';
+  platforms.forEach((p,i)=>{
+    const pRows=tpvRows.filter(r=>r.platform===p);
+    const lP=lastM?sum((fairTpvByM[lastM]||[]).filter(r=>r.platform===p),'amount'):0;
+    const pP=prevM?sum((fairTpvByM[prevM]||[]).filter(r=>r.platform===p),'amount'):0;
+    tpvPlatHtml+=platCard(p,sum(pRows,'amount'),pRows.length,pct(lP,pP),PAL[i%PAL.length]);
+  });
+  document.getElementById('pa-tpv-plat').innerHTML=tpvPlatHtml||'<div class="empty">Sin plataformas</div>';
+
+  // ── TPV Charts ──
+  lineC('c-pa-tpv-m',ms,[lineDS('TPV',ms.map(m=>sum(tpvByM[m]||[],'amount')),'rgb(34,197,94)',true)]);
+  lineC('c-pa-txn-m',ms,[lineDS('Txns',ms.map(m=>(tpvByM[m]||[]).length),'rgb(167,139,250)',true)],true);
+  barC('c-pa-tpv-plat',platforms,[{label:'TPV',data:platforms.map(p=>sum(tpvRows.filter(r=>r.platform===p),'amount')),backgroundColor:platforms.map((_,i)=>PAL[i%PAL.length]),borderRadius:4}]);
+
+  // Donut/pie de participación por plataforma
+  dc('c-pa-tpv-pie');
+  CI['c-pa-tpv-pie']=new Chart(document.getElementById('c-pa-tpv-pie'),{
+    type:'doughnut',
+    data:{
+      labels:platforms,
+      datasets:[{data:platforms.map(p=>sum(tpvRows.filter(r=>r.platform===p),'amount')),backgroundColor:platforms.map((_,i)=>PAL[i%PAL.length]),borderWidth:1.5,borderColor:'var(--s1)'}]
+    },
+    options:{
+      responsive:true,
+      cutout:'60%',
+      plugins:{
+        legend:{position:'bottom',labels:{font:{size:9},boxWidth:9,padding:8,color:'#8892a4'}},
+        datalabels:{
+          display:ctx=>{const tot=platforms.reduce((s,p)=>s+sum(tpvRows.filter(r=>r.platform===p),'amount'),0);return tot>0&&(ctx.dataset.data[ctx.dataIndex]/tot)>.03;},
+          formatter:(v)=>{const tot=platforms.reduce((s,p)=>s+sum(tpvRows.filter(r=>r.platform===p),'amount'),0);return(v/tot*100).toFixed(1)+'%';},
+          color:'#fff',font:{size:9,weight:'700'}
+        }
+      }
+    },
+    plugins:[ChartDataLabels]
+  });
+
+  // ── TPV Comparative periods ──
+  buildPATPVCompTable(tpvRows, ms, cutDay);
+
+  // ── Revenue KPIs ──
+  const gross=sum(data,'Gross Revenue'), cost=sum(data,'Cost Revenue'), net=sum(data,'Net');
+  const tpvL=tpvRows.filter(r=>r['AñoYMes']===lastM), tpvP=tpvRows.filter(r=>r['AñoYMes']===prevM);
+  const vG=pct(sum(byM[lastM]||[],'Gross Revenue'),sum(byM[prevM]||[],'Gross Revenue'));
+  const vC=pct(sum(byM[lastM]||[],'Cost Revenue'),sum(byM[prevM]||[],'Cost Revenue'));
+  const vN=pct(sum(byM[lastM]||[],'Net'),sum(byM[prevM]||[],'Net'));
+
+  document.getElementById('pa-rev-kpis').innerHTML=
+    kcard('TPV','$'+fmt(totalTpv),pct(sum(tpvL,'amount'),sum(tpvP,'amount')),'vs mes anterior','#a78bfa')+
+    kcard('Gross Revenue','$'+fmt(gross),vG,'vs mes anterior','#22c55e')+
+    kcard('Cost Revenue','$'+fmt(cost),vC,'vs mes anterior','#ef4444')+
+    kcard('Net Revenue','$'+fmt(net),vN,'Margen: '+((net/(gross||1))*100).toFixed(1)+'%','#60a5fa')+
+    kcard('Total TX',fmtI(totalTxn),pct(tpvL.length,tpvP.length),'vs mes anterior','#22d3ee');
+
+  // ── Revenue Platform cards ──
+  const lastRows=data.filter(r=>r['AñoYMes']===lastM);
+  const prevRows=data.filter(r=>r['AñoYMes']===prevM);
+  let revPlatHtml='';
+  platforms.forEach((p,i)=>{
+    const cur=lastRows.filter(r=>r.platform===p);
+    const prv=prevRows.filter(r=>r.platform===p);
+    const g=sum(cur,'Gross Revenue'),c2=sum(cur,'Cost Revenue'),n=sum(cur,'Net');
+    const gp=sum(prv,'Gross Revenue'),np=sum(prv,'Net');
+    const tx=data.filter(r=>r.platform===p&&r['P&L/FCF']==='TPV').length;
+    revPlatHtml+=revPlatCard(p,g,pct(g,gp),c2,n,pct(n,np),tx,PAL[i%PAL.length]);
+  });
+  document.getElementById('pa-rev-plat').innerHTML=revPlatHtml||'<div class="empty">Sin datos</div>';
+
+  // ── Revenue Charts ──
+  dc('c-pa-rev-ov');
+  CI['c-pa-rev-ov']=new Chart(document.getElementById('c-pa-rev-ov'),{
+    type:'bar',data:{labels:ms,datasets:[
+      {type:'bar',label:'Gross',data:ms.map(m=>sum(byM[m]||[],'Gross Revenue')),backgroundColor:'rgba(34,197,94,.18)',borderColor:'#22c55e',borderWidth:1.5,borderRadius:3},
+      {type:'bar',label:'Cost',data:ms.map(m=>sum(byM[m]||[],'Cost Revenue')),backgroundColor:'rgba(239,68,68,.18)',borderColor:'#ef4444',borderWidth:1.5,borderRadius:3},
+      {type:'line',label:'Net',data:ms.map(m=>sum(byM[m]||[],'Net')),borderColor:'#60a5fa',backgroundColor:'transparent',pointRadius:4,tension:.3}
+    ]},
+    options:{responsive:true,plugins:{legend:LEGT,datalabels:{display:false}},scales:{y:SY,x:SX}},
+    plugins:[ChartDataLabels]
+  });
+  barC('c-pa-rev-plat',platforms,[{label:'Gross',data:platforms.map(p=>sum(data.filter(r=>r.platform===p),'Gross Revenue')),backgroundColor:platforms.map((_,i)=>PAL[i%PAL.length]),borderRadius:4}]);
+
+  // ── Revenue Comparative periods ──
+  const revCutDay=document.getElementById('paRevCompDay')?.value?+document.getElementById('paRevCompDay').value:cutDay;
+  buildPARevCompTable(data, ms, revCutDay);
+}
+
+function buildPATPVCompTable(tpvRows, ms, cutDay){
+  const el=document.getElementById('pa-comp-tbl');
+  const sub=document.getElementById('pa-comp-subtitle');
+  if(ms.length<1){el.innerHTML='<div class="empty">Sin datos en el período</div>';return;}
+  const byM={};
+  ms.forEach(m=>{byM[m]=tpvRows.filter(r=>r['AñoYMes']===m&&+r.dia<=cutDay)});
+  const allPlats=uniqs(tpvRows,'platform');
+  if(sub) sub.textContent=ms.join('  ·  ')+`  ·  días 1–${cutDay}`;
+  const hasVar=ms.length>=2;
+  let html=`<table><thead><tr><th>Plataforma</th>${ms.map(m=>`<th class="r">${m}</th><th class="r">Txns</th>`).join('')}${hasVar?'<th class="r">Var %</th><th class="r">Δ USD</th>':''}</tr></thead><tbody>`;
+  const rows=allPlats.map(p=>{
+    const amts=ms.map(m=>sum(byM[m].filter(r=>r.platform===p),'amount'));
+    const txns=ms.map(m=>byM[m].filter(r=>r.platform===p).length);
+    return{p,amts,txns};
+  }).sort((a,b)=>b.amts[b.amts.length-1]-a.amts[a.amts.length-1]);
+  const totAmts=ms.map((_,i)=>rows.reduce((s,r)=>s+r.amts[i],0));
+  const totTxns=ms.map((_,i)=>rows.reduce((s,r)=>s+r.txns[i],0));
+  rows.forEach(({p,amts,txns})=>{
+    const n=amts.length;
+    const delta=hasVar?amts[n-1]-amts[n-2]:0;
+    const v=hasVar?pct(amts[n-1],amts[n-2]):null;
+    const vc=v===null?'':v>=0?'vp':'vn';
+    const dc2=delta>=0?'vp':'vn';
+    html+=`<tr><td><strong style="font-size:11px">${p}</strong></td>${amts.map((a,i)=>`<td class="r mono"${i<n-1?' style="color:var(--mu)"':''}>$${fmtD(a)}</td><td class="r" style="color:var(--di)">${fmtI(txns[i])}</td>`).join('')}${hasVar?`<td class="r ${vc}">${v===null?'N/A':v.toFixed(1)+'%'}</td><td class="r ${dc2}">${delta>=0?'+$':'-$'}${fmtD(Math.abs(delta))}</td>`:''}</tr>`;
+  });
+  const n=totAmts.length;
+  const dTot=hasVar?totAmts[n-1]-totAmts[n-2]:0;
+  const vTot=hasVar?pct(totAmts[n-1],totAmts[n-2]):null;
+  html+=`<tr style="border-top:1px solid var(--bd2);font-weight:700"><td>Total</td>${totAmts.map((a,i)=>`<td class="r mono"${i<n-1?' style="color:var(--mu)"':''}>$${fmtD(a)}</td><td class="r" style="color:var(--di)">${fmtI(totTxns[i])}</td>`).join('')}${hasVar?`<td class="r ${vTot>=0?'vp':'vn'}">${vTot===null?'N/A':vTot.toFixed(1)+'%'}</td><td class="r ${dTot>=0?'vp':'vn'}">${dTot>=0?'+$':'-$'}${fmtD(Math.abs(dTot))}</td>`:''}</tr>`;
+  html+='</tbody></table>';
+  el.innerHTML=html;
+}
+
+function buildPARevCompTable(data, ms, cutDay){
+  const el=document.getElementById('pa-rev-comp-tbl');
+  const sub=document.getElementById('pa-rev-comp-subtitle');
+  const lastM=ms[ms.length-1], prevM=ms[ms.length-2];
+  if(!lastM||!prevM){el.innerHTML='<div class="empty">Necesitas al menos 2 meses de datos</div>';return;}
+  const prevRows=data.filter(r=>r['AñoYMes']===prevM&&+r.dia<=cutDay);
+  const currRows=data.filter(r=>r['AñoYMes']===lastM&&+r.dia<=cutDay);
+  const allPlats=uniqs(data,'platform');
+  if(sub) sub.textContent=`${prevM} días 1–${cutDay}  vs  ${lastM} días 1–${cutDay}`;
+  let html=`<table><thead><tr>
+    <th rowspan="2" style="vertical-align:bottom">Plataforma</th>
+    <th colspan="4" class="r" style="color:var(--mu);border-bottom:1px solid var(--bd2);padding-bottom:4px">${prevM}</th>
+    <th colspan="4" class="r" style="border-bottom:1px solid var(--bd2);padding-bottom:4px">${lastM}</th>
+    <th colspan="3" class="r" style="border-bottom:1px solid var(--bd2);padding-bottom:4px">Variación</th>
+  </tr><tr>
+    <th class="r" style="color:var(--mu)">Gross</th><th class="r" style="color:#ef4444;opacity:.7">Cost</th><th class="r" style="color:var(--mu)">Net</th><th class="r" style="color:var(--di)">Txns</th>
+    <th class="r">Gross</th><th class="r" style="color:#ef4444">Cost</th><th class="r">Net</th><th class="r" style="color:var(--di)">Txns</th>
+    <th class="r">Gross %</th><th class="r">Net %</th><th class="r">Delta Net</th>
+  </tr></thead><tbody>`;
+  const rows=allPlats.map(p=>{
+    const pr=prevRows.filter(r=>r.platform===p), cr=currRows.filter(r=>r.platform===p);
+    return{p,pg:sum(pr,'Gross Revenue'),pc:sum(pr,'Cost Revenue'),pn:sum(pr,'Net'),pt:pr.filter(r=>r['P&L/FCF']==='TPV').length,
+      cg:sum(cr,'Gross Revenue'),cc:sum(cr,'Cost Revenue'),cn:sum(cr,'Net'),ct:cr.filter(r=>r['P&L/FCF']==='TPV').length};
+  }).sort((a,b)=>b.cg-a.cg);
+  let tpg=0,tpc=0,tpn=0,tpt=0,tcg=0,tcc=0,tcn=0,tct=0;
+  rows.forEach(({p,pg,pc,pn,pt,cg,cc,cn,ct})=>{
+    tpg+=pg;tpc+=pc;tpn+=pn;tpt+=pt;tcg+=cg;tcc+=cc;tcn+=cn;tct+=ct;
+    const vG=pct(cg,pg),vN=pct(cn,pn),dN=cn-pn;
+    html+=`<tr><td><strong style="font-size:11px">${p}</strong></td>
+      <td class="r mono" style="color:var(--mu)">$${fmt(pg)}</td><td class="r mono" style="color:#ef4444;opacity:.75">$${fmt(pc)}</td><td class="r mono" style="color:var(--mu)">$${fmt(pn)}</td><td class="r" style="color:var(--di)">${fmtI(pt)}</td>
+      <td class="r mono">$${fmt(cg)}</td><td class="r mono" style="color:#ef4444">$${fmt(cc)}</td><td class="r mono">$${fmt(cn)}</td><td class="r" style="color:var(--di)">${fmtI(ct)}</td>
+      <td class="r ${vG===null?'':vG>=0?'vp':'vn'}">${vG===null?'N/A':vG.toFixed(1)+'%'}</td>
+      <td class="r ${vN===null?'':vN>=0?'vp':'vn'}">${vN===null?'N/A':vN.toFixed(1)+'%'}</td>
+      <td class="r ${dN>=0?'vp':'vn'}">${dN>=0?'+':''}$${fmt(dN)}</td></tr>`;
+  });
+  const vGT=pct(tcg,tpg),vNT=pct(tcn,tpn),dNT=tcn-tpn;
+  html+=`<tr style="border-top:1px solid var(--bd2);font-weight:700"><td>Total</td>
+    <td class="r mono" style="color:var(--mu)">$${fmt(tpg)}</td><td class="r mono" style="color:#ef4444;opacity:.75">$${fmt(tpc)}</td><td class="r mono" style="color:var(--mu)">$${fmt(tpn)}</td><td class="r" style="color:var(--di)">${fmtI(tpt)}</td>
+    <td class="r mono">$${fmt(tcg)}</td><td class="r mono" style="color:#ef4444">$${fmt(tcc)}</td><td class="r mono">$${fmt(tcn)}</td><td class="r" style="color:var(--di)">${fmtI(tct)}</td>
+    <td class="r ${vGT===null?'':vGT>=0?'vp':'vn'}">${vGT===null?'N/A':vGT.toFixed(1)+'%'}</td>
+    <td class="r ${vNT===null?'':vNT>=0?'vp':'vn'}">${vNT===null?'N/A':vNT.toFixed(1)+'%'}</td>
+    <td class="r ${dNT>=0?'vp':'vn'}">${dNT>=0?'+':''}$${fmt(dNT)}</td></tr>`;
+  html+='</tbody></table>';
+  el.innerHTML=html;
+}
+
+function refreshPAComp(){
+  if(!_paData) return;
+  const inp=document.getElementById('paCompDay');
+  const day=inp.value?+inp.value:(F.d2?+F.d2:31);
+  buildPATPVCompTable(_paData.filter(r=>r['P&L/FCF']==='TPV'), mons(_paData), day);
+}
+
+function refreshPARevComp(){
+  if(!_paData) return;
+  const inp=document.getElementById('paRevCompDay');
+  const day=inp.value?+inp.value:(F.d2?+F.d2:31);
+  buildPARevCompTable(_paData, mons(_paData), day);
 }
 
 SB.auth.onAuthStateChange(async(event,session)=>{
