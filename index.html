@@ -2222,7 +2222,11 @@ async function loadPersonalAccount(){
     if(el) el.innerHTML=LD;
   });
 
-  const data=await fetchPA();
+  let data;
+  try { data=await fetchPA(); } catch(e){
+    document.getElementById('pa-rev-kpis').innerHTML=`<div style="color:#ef4444;padding:12px;font-size:11px">Error fetch: ${e.message}</div>`;
+    return;
+  }
   _paData=data;
 
   if(!data.length){
@@ -2238,6 +2242,8 @@ async function loadPersonalAccount(){
   console.log('Columnas:',Object.keys(data[0]));
   console.log('Ejemplo fila:',data[0]);
   console.groupEnd();
+
+  try{
 
   // ── Construir meses desde la columna de período disponible ──
   const ms=[...new Set(data.map(r=>paMonth(r)).filter(Boolean))].sort((a,b)=>{
@@ -2329,6 +2335,10 @@ async function loadPersonalAccount(){
   const _paRCD=document.getElementById('paRevCompDay');
   const revCutDay=_paRCD&&_paRCD.value?+_paRCD.value:(F.d2?+F.d2:cutDay);
   buildPARevCompTable(data, ms, revCutDay);
+  } catch(e){
+    console.error('PA render error:',e);
+    document.getElementById('pa-rev-kpis').innerHTML=`<div style="color:#ef4444;padding:12px;font-size:11px;grid-column:1/-1">Error: ${e.message}</div>`;
+  }
 }
 
 function buildPATPVCompTable(data, ms, cutDay){
