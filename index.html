@@ -536,22 +536,11 @@ tbody tr:hover td{background:rgba(255,255,255,.025)}
     <div><h2>Personal Account</h2><p id="pa-subtitle">TPV & Revenue consolidado · Vista por plataforma con períodos comparativos</p></div>
   </div>
 
-  <!-- ══ SECCIÓN TPV ══ -->
-  <div class="pa-section-sep">
-    <div class="pa-sep-icon" style="background:var(--grb)">
-      <svg viewBox="0 0 15 15" fill="none" width="14" height="14"><path d="M1.5 11L5 7l3 3 5.5-6.5" stroke="#22c55e" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
-    </div>
-    <div>
-      <div class="pa-sep-title">TPV – Total Payment Volume</div>
-      <div class="pa-sep-sub">Depósitos totales · Desglose por plataforma</div>
-    </div>
-  </div>
+  <!-- KPI summary row -->
+  <div class="krow r5" id="pa-rev-kpis"><div class="ld"><div class="sp"></div>Cargando…</div></div>
 
-  <!-- Total Deposit + KPI cards -->
-  <div class="krow" id="pa-tpv-kpis"><div class="ld"><div class="sp"></div>Cargando…</div></div>
-
-  <!-- Platform breakdown cards -->
-  <div class="plat-row" id="pa-tpv-plat"><div class="ld"><div class="sp"></div></div></div>
+  <!-- Combined platform cards -->
+  <div class="plat-row" id="pa-combo-plat"><div class="ld"><div class="sp"></div></div></div>
 
   <!-- TPV Charts -->
   <div class="g4" style="margin-bottom:13px">
@@ -578,23 +567,6 @@ tbody tr:hover td{background:rgba(255,255,255,.025)}
     </div>
     <div id="pa-comp-tbl" style="overflow-x:auto"><div class="ld"><div class="sp"></div></div></div>
   </div>
-
-  <!-- ══ SECCIÓN REVENUE ══ -->
-  <div class="pa-section-sep">
-    <div class="pa-sep-icon" style="background:var(--blb)">
-      <svg viewBox="0 0 15 15" fill="none" width="14" height="14"><rect x="1.5" y="3.5" width="12" height="9" rx="1.5" stroke="#60a5fa" stroke-width="1.4"/><path d="M1.5 7h12" stroke="#60a5fa" stroke-width="1.2"/><circle cx="7.5" cy="10" r="1.2" fill="#60a5fa"/></svg>
-    </div>
-    <div>
-      <div class="pa-sep-title">Revenue</div>
-      <div class="pa-sep-sub">Gross · Cost · Net por plataforma</div>
-    </div>
-  </div>
-
-  <!-- Revenue KPI cards -->
-  <div class="krow r5" id="pa-rev-kpis"><div class="ld"><div class="sp"></div>Cargando…</div></div>
-
-  <!-- Revenue Platform cards -->
-  <div class="plat-row" id="pa-rev-plat"><div class="ld"><div class="sp"></div></div></div>
 
   <!-- Revenue Charts -->
   <div class="g2 mb">
@@ -1097,6 +1069,40 @@ function revPlatCard(name,g,vg,c,n,vn,tx,color,isTotal=false){
       <div style="font-size:8px;font-weight:700;color:var(--di);text-transform:uppercase;letter-spacing:.5px">Net</div>
       <div style="font-size:13px;font-weight:700;color:#60a5fa">$${fmt(n)}</div>
       ${tn}
+    </div>
+    <div style="margin-top:8px;padding-top:7px;border-top:1px solid var(--bd)">
+      <div style="font-size:8px;font-weight:700;color:var(--di);text-transform:uppercase;letter-spacing:.5px">Total TX</div>
+      <div style="font-size:13px;font-weight:700;color:var(--mu)">${fmtI(tx)}</div>
+    </div>
+  </div>`;
+}
+
+function comboPlatCard(name,dep,vDep,g,vg,c,n,vn,tx,color){
+  function tr(v,sfx){
+    if(v===null) return`<span class="pk-trend neu">– sin datos</span>`;
+    return v>=0?`<span class="pk-trend up">▲ ${v.toFixed(1)}%${sfx}</span>`
+               :`<span class="pk-trend dn">▼ ${Math.abs(v).toFixed(1)}%${sfx}</span>`;
+  }
+  return`<div class="pk" style="border-top:2px solid ${color}">
+    <div class="pk-name" style="color:${color}">${name}</div>
+    <div style="margin-top:8px">
+      <div style="font-size:8px;font-weight:700;color:var(--di);text-transform:uppercase;letter-spacing:.5px">TPV Deposit</div>
+      <div style="font-size:15px;font-weight:800;color:var(--tx);letter-spacing:-.3px">$${fmt(dep)}</div>
+      ${tr(vDep,' vs mes ant.')}
+    </div>
+    <div style="margin-top:8px;padding-top:7px;border-top:1px solid var(--bd)">
+      <div style="font-size:8px;font-weight:700;color:var(--di);text-transform:uppercase;letter-spacing:.5px">Gross</div>
+      <div style="font-size:15px;font-weight:800;color:#22c55e;letter-spacing:-.3px">$${fmt(g)}</div>
+      ${tr(vg,' vs mes ant.')}
+    </div>
+    <div style="margin-top:8px;padding-top:7px;border-top:1px solid var(--bd)">
+      <div style="font-size:8px;font-weight:700;color:var(--di);text-transform:uppercase;letter-spacing:.5px">Cost</div>
+      <div style="font-size:13px;font-weight:700;color:#ef4444">$${fmt(c)}</div>
+    </div>
+    <div style="margin-top:8px;padding-top:7px;border-top:1px solid var(--bd)">
+      <div style="font-size:8px;font-weight:700;color:var(--di);text-transform:uppercase;letter-spacing:.5px">Net</div>
+      <div style="font-size:13px;font-weight:700;color:#60a5fa">$${fmt(n)}</div>
+      ${tr(vn,' vs mes ant.')}
     </div>
     <div style="margin-top:8px;padding-top:7px;border-top:1px solid var(--bd)">
       <div style="font-size:8px;font-weight:700;color:var(--di);text-transform:uppercase;letter-spacing:.5px">Total TX</div>
@@ -2211,7 +2217,7 @@ function paPlatform(r){return r.platform||r.Platform||'';}
 function sumPA(arr,fn){return arr.reduce(function(s,r){return s+fn(r);},0);}
 
 async function loadPersonalAccount(){
-  ['pa-tpv-kpis','pa-tpv-plat','pa-rev-kpis','pa-rev-plat','pa-comp-tbl','pa-rev-comp-tbl'].forEach(id=>{
+  ['pa-rev-kpis','pa-combo-plat','pa-comp-tbl','pa-rev-comp-tbl'].forEach(id=>{
     const el=document.getElementById(id);
     if(el) el.innerHTML=LD;
   });
@@ -2220,7 +2226,7 @@ async function loadPersonalAccount(){
   _paData=data;
 
   if(!data.length){
-    ['pa-tpv-kpis','pa-tpv-plat','pa-rev-kpis','pa-rev-plat','pa-comp-tbl','pa-rev-comp-tbl'].forEach(id=>{
+    ['pa-rev-kpis','pa-combo-plat','pa-comp-tbl','pa-rev-comp-tbl'].forEach(id=>{
       const el=document.getElementById(id);
       if(el) el.innerHTML='<div class="empty">Sin datos para el período seleccionado</div>';
     });
@@ -2254,22 +2260,35 @@ async function loadPersonalAccount(){
   const lC=lastM?sumPA(byM[lastM]||[],paCost):0,  pC=prevM?sumPA(byM[prevM]||[],paCost):0;
   const lN=lastM?sumPA(byM[lastM]||[],paNet):0,   pN=prevM?sumPA(byM[prevM]||[],paNet):0;
 
-  // ── KPI principales ──
-  document.getElementById('pa-tpv-kpis').innerHTML=
-    kcard('Total TPV','$'+fmt(totalDep),pct(lAmt,pAmt),'vs mes ant. día '+cutDay,PAL[0])+
-    kcard('TPV Gross','$'+fmt(gross),pct(lG,pG),'vs mes anterior','#22c55e')+
-    kcard('Gross Cost','$'+fmt(cost),pct(lC,pC),'vs mes anterior','#ef4444')+
-    kcard('Net Revenue','$'+fmt(net),pct(lN,pN),'Margen: '+((net/(gross||1))*100).toFixed(1)+'%','#60a5fa');
+  // ── Revenue KPIs ──
+  document.getElementById('pa-rev-kpis').innerHTML=
+    kcard('Total Deposit','$'+fmt(totalDep),pct(lAmt,pAmt),'vs mes anterior','#a78bfa')+
+    kcard('Gross Revenue','$'+fmt(gross),pct(lG,pG),'vs mes anterior','#22c55e')+
+    kcard('Cost Revenue','$'+fmt(cost),pct(lC,pC),'vs mes anterior','#ef4444')+
+    kcard('Net Revenue','$'+fmt(net),pct(lN,pN),'Margen: '+((net/(gross||1))*100).toFixed(1)+'%','#60a5fa')+
+    kcard('Txns',fmtI(totalTxn),pct(lTxn,pTxn),'vs mes anterior','#22d3ee');
 
-  // ── Platform deposit cards ──
-  let tpvPlatHtml='';
+  // ── Combined platform cards ──
+  let comboPlatHtml='';
   platforms.forEach((p,i)=>{
     const pRows=data.filter(r=>paPlatform(r)===p);
     const lP=lastM?sumPA((byMcut[lastM]||[]).filter(r=>paPlatform(r)===p),paDeposit):0;
     const pP=prevM?sumPA((byMcut[prevM]||[]).filter(r=>paPlatform(r)===p),paDeposit):0;
-    tpvPlatHtml+=platCard(p,sumPA(pRows,paDeposit),pRows.length,pct(lP,pP),PAL[i%PAL.length]);
+    const lGp=lastM?sumPA((byM[lastM]||[]).filter(r=>paPlatform(r)===p),paGross):0;
+    const pGp=prevM?sumPA((byM[prevM]||[]).filter(r=>paPlatform(r)===p),paGross):0;
+    const lNp=lastM?sumPA((byM[lastM]||[]).filter(r=>paPlatform(r)===p),paNet):0;
+    const pNp=prevM?sumPA((byM[prevM]||[]).filter(r=>paPlatform(r)===p),paNet):0;
+    comboPlatHtml+=comboPlatCard(
+      p,
+      sumPA(pRows,paDeposit), pct(lP,pP),
+      sumPA(pRows,paGross),   pct(lGp,pGp),
+      sumPA(pRows,paCost),
+      sumPA(pRows,paNet),     pct(lNp,pNp),
+      pRows.length,
+      PAL[i%PAL.length]
+    );
   });
-  document.getElementById('pa-tpv-plat').innerHTML=tpvPlatHtml||'<div class="empty">Sin plataformas</div>';
+  document.getElementById('pa-combo-plat').innerHTML=comboPlatHtml||'<div class="empty">Sin plataformas</div>';
 
   // ── Deposit Charts ──
   lineC('c-pa-tpv-m',ms,[lineDS('Deposit',ms.map(m=>sumPA(byM[m]||[],paDeposit)),'rgb(34,197,94)',true)]);
@@ -2292,26 +2311,6 @@ async function loadPersonalAccount(){
 
   // ── Deposit comparative periods ──
   buildPATPVCompTable(data, ms, cutDay);
-
-  // ── Revenue KPIs ──
-  document.getElementById('pa-rev-kpis').innerHTML=
-    kcard('Total Deposit','$'+fmt(totalDep),pct(lAmt,pAmt),'vs mes anterior','#a78bfa')+
-    kcard('Gross Revenue','$'+fmt(gross),pct(lG,pG),'vs mes anterior','#22c55e')+
-    kcard('Cost Revenue','$'+fmt(cost),pct(lC,pC),'vs mes anterior','#ef4444')+
-    kcard('Net Revenue','$'+fmt(net),pct(lN,pN),'Margen: '+((net/(gross||1))*100).toFixed(1)+'%','#60a5fa')+
-    kcard('Txns',fmtI(totalTxn),pct(lTxn,pTxn),'vs mes anterior','#22d3ee');
-
-  // ── Revenue Platform cards ──
-  const lastRows=data.filter(r=>paMonth(r)===lastM);
-  const prevRows=data.filter(r=>paMonth(r)===prevM);
-  let revPlatHtml='';
-  platforms.forEach((p,i)=>{
-    const cur=lastRows.filter(r=>paPlatform(r)===p), prv=prevRows.filter(r=>paPlatform(r)===p);
-    const g=sumPA(cur,paGross),c2=sumPA(cur,paCost),n=sumPA(cur,paNet);
-    const gp=sumPA(prv,paGross),np=sumPA(prv,paNet);
-    revPlatHtml+=revPlatCard(p,g,pct(g,gp),c2,n,pct(n,np),data.filter(r=>paPlatform(r)===p).length,PAL[i%PAL.length]);
-  });
-  document.getElementById('pa-rev-plat').innerHTML=revPlatHtml||'<div class="empty">Sin datos</div>';
 
   // ── Revenue Charts ──
   dc('c-pa-rev-ov');
