@@ -1500,6 +1500,7 @@ function refreshRevComp(){
 async function loadClientes(){
   document.getElementById('cli-kpis').innerHTML=LD;
   document.getElementById('cli-tbl').innerHTML=LD;
+  document.getElementById('cli-var').innerHTML=LD;
   const data=await fetchAll();
   if(data.length) console.log('%c🔑 Columnas en consolidated:','color:#fbbf24;font-weight:700', Object.keys(data[0]));
   const ms=mons(data),byCli=grp(data,'client');
@@ -1546,6 +1547,8 @@ async function loadClientes(){
     });
     vt+='</tbody></table>';
     document.getElementById('cli-var').innerHTML=vt;
+  } else {
+    document.getElementById('cli-var').innerHTML='<div class="empty">Necesitas al menos 2 meses para ver la variación MoM</div>';
   }
 }
 
@@ -2246,13 +2249,17 @@ async function loadPersonalAccount(){
   const pAmt=prevM?sumPA(byMcut[prevM]||[],paDeposit):0;
   const lTxn=lastM?(byMcut[lastM]||[]).length:0;
   const pTxn=prevM?(byMcut[prevM]||[]).length:0;
+  const gross=sumPA(data,paGross), cost=sumPA(data,paCost), net=sumPA(data,paNet);
+  const lG=lastM?sumPA(byM[lastM]||[],paGross):0, pG=prevM?sumPA(byM[prevM]||[],paGross):0;
+  const lC=lastM?sumPA(byM[lastM]||[],paCost):0,  pC=prevM?sumPA(byM[prevM]||[],paCost):0;
+  const lN=lastM?sumPA(byM[lastM]||[],paNet):0,   pN=prevM?sumPA(byM[prevM]||[],paNet):0;
 
-  // ── KPI Depósitos ──
+  // ── KPI principales ──
   document.getElementById('pa-tpv-kpis').innerHTML=
-    kcard('Total Deposit','$'+fmt(totalDep),pct(lAmt,pAmt),'vs mes ant. día '+cutDay,PAL[0])+
-    kcard('Transacciones',fmtI(totalTxn),pct(lTxn,pTxn),'vs mes anterior',PAL[1])+
-    kcard('Plataformas activas',fmtI(platforms.length),null,ms.length+' meses en el período',PAL[2])+
-    kcard('Promedio por TX','$'+fmt(totalTxn?totalDep/totalTxn:0),null,'Deposit promedio',PAL[3]);
+    kcard('Total TPV','$'+fmt(totalDep),pct(lAmt,pAmt),'vs mes ant. día '+cutDay,PAL[0])+
+    kcard('TPV Gross','$'+fmt(gross),pct(lG,pG),'vs mes anterior','#22c55e')+
+    kcard('Gross Cost','$'+fmt(cost),pct(lC,pC),'vs mes anterior','#ef4444')+
+    kcard('Net Revenue','$'+fmt(net),pct(lN,pN),'Margen: '+((net/(gross||1))*100).toFixed(1)+'%','#60a5fa');
 
   // ── Platform deposit cards ──
   let tpvPlatHtml='';
@@ -2287,11 +2294,6 @@ async function loadPersonalAccount(){
   buildPATPVCompTable(data, ms, cutDay);
 
   // ── Revenue KPIs ──
-  const gross=sumPA(data,paGross), cost=sumPA(data,paCost), net=sumPA(data,paNet);
-  const lG=lastM?sumPA(byM[lastM]||[],paGross):0, pG=prevM?sumPA(byM[prevM]||[],paGross):0;
-  const lC=lastM?sumPA(byM[lastM]||[],paCost):0,  pC=prevM?sumPA(byM[prevM]||[],paCost):0;
-  const lN=lastM?sumPA(byM[lastM]||[],paNet):0,   pN=prevM?sumPA(byM[prevM]||[],paNet):0;
-
   document.getElementById('pa-rev-kpis').innerHTML=
     kcard('Total Deposit','$'+fmt(totalDep),pct(lAmt,pAmt),'vs mes anterior','#a78bfa')+
     kcard('Gross Revenue','$'+fmt(gross),pct(lG,pG),'vs mes anterior','#22c55e')+
