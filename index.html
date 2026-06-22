@@ -272,6 +272,8 @@ tbody tr:hover td{background:rgba(255,255,255,.025)}
 .pa-sep-icon{width:26px;height:26px;border-radius:7px;display:flex;align-items:center;justify-content:center;flex-shrink:0}
 .pa-sep-title{font-size:13px;font-weight:800;color:var(--tx);letter-spacing:-.2px}
 .pa-sep-sub{font-size:10px;color:var(--mu);margin-top:1px}
+#pa-combo-plat{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:10px;margin-bottom:18px}
+#pa-combo-plat .pk{max-width:none;flex:none}
 </style>
 </head>
 <body>
@@ -543,11 +545,13 @@ tbody tr:hover td{background:rgba(255,255,255,.025)}
   <div class="plat-row" id="pa-combo-plat"><div class="ld"><div class="sp"></div></div></div>
 
   <!-- TPV Charts -->
-  <div class="g4" style="margin-bottom:13px">
-    <div class="card"><div class="ch"><div class="ct">TPV por Mes</div></div><canvas id="c-pa-tpv-m" height="120"></canvas></div>
-    <div class="card"><div class="ch"><div class="ct">Txns por Mes</div></div><canvas id="c-pa-txn-m" height="120"></canvas></div>
-    <div class="card"><div class="ch"><div class="ct">TPV por Plataforma</div></div><canvas id="c-pa-tpv-plat" height="120"></canvas></div>
-    <div class="card"><div class="ch"><div class="ct">Participación por Plataforma</div></div><canvas id="c-pa-tpv-pie" height="120"></canvas></div>
+  <div class="g2" style="margin-bottom:13px">
+    <div class="card"><div class="ch"><div class="ct">TPV por Mes</div></div><canvas id="c-pa-tpv-m" height="140"></canvas></div>
+    <div class="card"><div class="ch"><div class="ct">Txns por Mes</div></div><canvas id="c-pa-txn-m" height="140"></canvas></div>
+  </div>
+  <div class="g2" style="margin-bottom:13px">
+    <div class="card"><div class="ch"><div class="ct">TPV por Plataforma</div></div><canvas id="c-pa-tpv-plat" height="140"></canvas></div>
+    <div class="card"><div class="ch"><div class="ct">Participación por Plataforma</div></div><canvas id="c-pa-tpv-pie" height="140"></canvas></div>
   </div>
 
   <!-- TPV Comparative periods -->
