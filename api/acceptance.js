@@ -82,11 +82,14 @@ module.exports = async (req, res) => {
   }
 
   // Muestra acotada de transacciones recientes, solo para la tabla de detalle del dashboard.
+  // Excluye msgtype='Inquiry' (consultas de saldo, no son compras) — mismo criterio que
+  // la función acceptance_summary, ver SETUP.md 9.5.
   const { data: rows, error: rowsErr } = await sbCardops
     .from('acceptance')
     .select(COLUMNS)
     .gte('localdatetime', from)
     .lte('localdatetime', to)
+    .neq('msgtype', 'Inquiry')
     // nullsFirst:false es necesario: en Postgres los NULL van primero en orden
     // descendente por default, así que sin esto la "muestra reciente" traería puras
     // filas con localdatetime nulo en vez de las transacciones más nuevas.

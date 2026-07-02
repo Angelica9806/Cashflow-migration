@@ -211,6 +211,9 @@ as $$
   with dedup as (
     -- Una transacción puede tener varias filas/mensajes (ej. reversas) — nos quedamos
     -- con la más reciente por threddtransactionid, igual que hace el frontend.
+    -- Se excluye msgtype='Inquiry' (consultas de saldo, no son compras) — confirmado
+    -- que meses con proporción alta de Inquiry (ej. octubre 2025, ~15% vs ~5% típico)
+    -- distorsionaban fuerte el % de declined_by_rules.
     select distinct on (threddtransactionid)
       threddtransactionid,
       coalesce(eventtime, localdatetime) as tx_time,
@@ -221,6 +224,7 @@ as $$
     from acceptance
     where localdatetime >= from_date and localdatetime <= to_date
       and threddtransactionid is not null
+      and msgtype <> 'Inquiry'
     order by threddtransactionid, coalesce(eventtime, localdatetime) desc
   ),
   classified as (
@@ -263,6 +267,8 @@ as $$
   from classified;
 $$;
 ```
+
+**Nota sobre validación cruzada (2026-07-02):** se comparó mes a mes contra el dashboard de referencia de la empresa. Diciembre 2025 matchea exacto (95,9/3,4/0,7). Excluir `Inquiry` corrigió el caso más grande (octubre 2025, que tenía ~15% de mensajes Inquiry vs ~5% típico). Queda un desvío chico sin explicar (~0,5-0,9 puntos porcentuales) en meses de alto volumen como junio 2026 — se probó filtrar por `direction='outbound'` y por `transactiontype='00'` y ninguno de los dos lo explica. Si en algún momento se identifica el filtro exacto que usa el dashboard de referencia, ajustar acá y en `classifyAcceptance()` de `index.html`.
 
 No hace falta `grant execute ... to anon` — la función solo se llama server-side desde `api/acceptance.js` usando la secret key (rol de servicio, bypasea grants). Si en algún momento cambia la fórmula de negocio de accepted/declined/declined_by_rules, hay que actualizarla en **dos lugares**: esta función SQL y `classifyAcceptance()` en `index.html` (esta última se usa para clasificar la muestra de transacciones recientes que sí viaja al browser para la tabla de detalle).
 
