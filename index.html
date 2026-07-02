@@ -902,11 +902,13 @@ function coFilterRange(points, from, to){
 }
 // Fórmula de negocio confirmada por Ontop para clasificar una transacción de `acceptance`:
 // 1) si msgstatusreason contiene "declined" → declined, si no → accepted
-// 2) si outputtag = "declined" Y el paso 1 dio accepted → se reclasifica a declined_by_rules
+// 2) si outputtag = "decline" Y el paso 1 dio accepted → se reclasifica a declined_by_rules
+// Nota: el valor real en la tabla es "Decline" (no "Declined") — confirmado sobre 2000+
+// filas reales, los únicos valores de outputtag son "Approved" y "Decline".
 function classifyAcceptance(row){
   const reason=(row.msgstatusreason||'').toLowerCase();
   let status = reason.includes('declined') ? 'declined' : 'accepted';
-  if(status==='accepted' && (row.outputtag||'').toLowerCase()==='declined') status='declined_by_rules';
+  if(status==='accepted' && (row.outputtag||'').toLowerCase()==='decline') status='declined_by_rules';
   return status;
 }
 
@@ -2711,14 +2713,14 @@ async function loadCoAcceptance(){
   const badge=st=>st==='accepted'?'<span class="cbadge bg">Accepted</span>'
     :st==='declined'?'<span class="cbadge br">Declined</span>'
     :'<span class="cbadge" style="background:var(--amb);color:var(--am)">Declined by Rules</span>';
-  let tbl=`<table><thead><tr><th>Fecha</th><th>Estado</th><th class="r">Monto</th><th>País</th><th>Producto</th><th>Nombre</th><th>Email</th></tr></thead><tbody>`;
+  let tbl=`<table><thead><tr><th>Fecha</th><th>Estado</th><th class="r">Monto</th><th>País</th><th>Producto</th></tr></thead><tbody>`;
   if(!rows.length){
-    tbl+=`<tr><td colspan="7"><div class="empty">Sin transacciones recientes para mostrar en el detalle</div></td></tr>`;
+    tbl+=`<tr><td colspan="5"><div class="empty">Sin transacciones recientes para mostrar en el detalle</div></td></tr>`;
   } else {
     rows.forEach(r=>{
       const st=classifyAcceptance(r);
       const t=r.eventtime||r.localdatetime||'';
-      tbl+=`<tr><td style="color:var(--mu);font-size:10px;white-space:nowrap">${t.replace('T',' ').slice(0,19)}</td><td>${badge(st)}</td><td class="r">${fmtN(r.amount_billingvalue)} ${r.amount_billingcurrency||''}</td><td>${r.merchantcountry||'–'}</td><td>${r.cardproducttype||'–'}</td><td>${r.full_name||'–'}</td><td class="mono">${r.email||'–'}</td></tr>`;
+      tbl+=`<tr><td style="color:var(--mu);font-size:10px;white-space:nowrap">${t.replace('T',' ').slice(0,19)}</td><td>${badge(st)}</td><td class="r">${fmtN(r.amount_billingvalue)} ${r.amount_billingcurrency||''}</td><td>${r.merchantcountry||'–'}</td><td>${r.cardproducttype||'–'}</td></tr>`;
     });
   }
   tbl+='</tbody></table>';

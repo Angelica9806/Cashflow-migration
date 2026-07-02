@@ -226,13 +226,16 @@ as $$
   classified as (
     -- Misma fórmula de negocio que classifyAcceptance() en index.html:
     -- 1) msgstatusreason contiene "declined" → declined
-    -- 2) si no, y outputtag = "declined" → declined_by_rules
+    -- 2) si no, y outputtag = "decline" → declined_by_rules
     -- 3) si no → accepted
+    -- Ojo: el valor real en la tabla es "Decline" (sin la "d" final), no "Declined"
+    -- — confirmado sobre 2000+ filas reales, los únicos valores de outputtag son
+    -- "Approved" y "Decline".
     select
       *,
       case
         when lower(coalesce(msgstatusreason,'')) like '%declined%' then 'declined'
-        when lower(coalesce(outputtag,'')) = 'declined' then 'declined_by_rules'
+        when lower(coalesce(outputtag,'')) = 'decline' then 'declined_by_rules'
         else 'accepted'
       end as status
     from dedup

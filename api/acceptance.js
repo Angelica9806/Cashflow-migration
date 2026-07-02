@@ -20,14 +20,14 @@ const ALLOWED_DOMAIN = '@getontop.com';
 const DETAIL_LIMIT = 300;
 
 // Columnas explícitas — nunca select('*') acá. Se excluyen a propósito las columnas
-// más crudas de revisión manual (reviewcomment, triggeredrules, riskscorevaa, reviewedby):
-// no hacen falta para la fórmula de negocio y son ruido para la tabla del dashboard.
+// más crudas de revisión manual (reviewcomment, triggeredrules, riskscorevaa, reviewedby)
+// y las de PII (full_name, email): no se muestran en el dashboard, así que no hace
+// falta traerlas hasta acá — a pedido explícito, por protección de datos.
 const COLUMNS = [
   'threddtransactionid', 'cardid', 'cardentityid', 'localdatetime', 'eventtime',
   'msgtype', 'msgstatusreason', 'outputtag',
   'amount_billingvalue', 'amount_billingcurrency',
-  'merchantcountry', 'cardproducttype', 'transactiontype', 'direction',
-  'full_name', 'email'
+  'merchantcountry', 'cardproducttype', 'transactiontype', 'direction'
 ].join(',');
 
 async function validatePayinsUser(token) {
