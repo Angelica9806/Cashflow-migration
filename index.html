@@ -751,13 +751,14 @@ tbody tr:hover td{background:rgba(255,255,255,.025)}
     <div class="card mb"><div class="ch"><div class="ct">Detalle Diario</div></div><div class="tw" id="co-cb-tbl"><div class="ld"><div class="sp"></div></div></div></div>
   </div>
 
-  <!-- ── Panel: Card Ops (card_envios) — costo por proveedor cargado manualmente, ver CO_PROVIDER_COST ── -->
+  <!-- ── Panel: Card Ops (card_envios = costo, card_distribution = revenue) — costo por proveedor cargado manualmente, ver CO_PROVIDER_COST ── -->
   <div class="co-panel" id="co-panel-cards">
-    <div class="krow" id="co-cd-kpis"><div class="ld"><div class="sp"></div>Cargando…</div></div>
+    <div class="krow r5" id="co-cd-kpis"><div class="ld"><div class="sp"></div>Cargando…</div></div>
     <div class="g2 mb">
       <div class="card"><div class="ch"><div class="ct">Envíos por Día</div></div><canvas id="c-co-env-trend" height="160"></canvas></div>
       <div class="card"><div class="ch"><div class="ct">Envíos por Proveedor</div></div><canvas id="c-co-env-prov" height="160"></canvas></div>
     </div>
+    <div class="card mb"><div class="ch"><div class="ct">Revenue vs Costo — Neto por Mes</div></div><div class="tw" id="co-net-tbl"><div class="ld"><div class="sp"></div></div></div></div>
     <div class="card mb"><div class="ch"><div class="ct">Envíos — Detalle</div></div><div class="tw" id="co-env-tbl"><div class="ld"><div class="sp"></div></div></div></div>
   </div>
 
@@ -2789,7 +2790,9 @@ const CO_PROVIDER_COST = {
 
 async function loadCoCards(){
   document.getElementById('co-cd-kpis').innerHTML=LD;
+  document.getElementById('co-net-tbl').innerHTML=LD;
   document.getElementById('co-env-tbl').innerHTML=LD;
+  let cdPoints=[];
   try{
     let rows=[],from=0;
     while(true){
@@ -2804,8 +2807,15 @@ async function loadCoCards(){
       from+=4999;
     }
     _coEnvRows=rows;
+
+    // Revenue por distribución de tarjetas (card_distribution) — es el pago que hacen
+    // los usuarios, NO cantidad de tarjetas. Se cruza por mes contra el costo de envíos.
+    const {data:cd,error:e2}=await SB_CARDOPS.from('card_distribution').select('*');
+    if(e2) throw e2;
+    cdPoints=coFilterRange(unpivotDaily(cd||[]),CO.from,CO.to);
   }catch(e){
-    document.getElementById('co-cd-kpis').innerHTML=`<div class="empty" style="color:var(--re);padding:20px">⚠️ Supabase error: ${e.message||e.code||JSON.stringify(e)}<br><span style="font-size:10px;color:var(--di)">Check RLS policies (anon) on card_envios — proyecto Card Ops Dash</span></div>`;
+    document.getElementById('co-cd-kpis').innerHTML=`<div class="empty" style="color:var(--re);padding:20px">⚠️ Supabase error: ${e.message||e.code||JSON.stringify(e)}<br><span style="font-size:10px;color:var(--di)">Check RLS policies (anon) on card_envios / card_distribution — proyecto Card Ops Dash</span></div>`;
+    document.getElementById('co-net-tbl').innerHTML='';
     document.getElementById('co-env-tbl').innerHTML='';
     return;
   }
@@ -2825,25 +2835,66 @@ async function loadCoCards(){
     .map(g=>[Object.entries(g.labels).sort((a,b)=>b[1]-a[1])[0][0], g.count])
     .sort((a,b)=>b[1]-a[1]);
 
-  // Costo promedio ponderado por volumen de envíos de cada proveedor — solo considera
-  // proveedores con costo cargado en CO_PROVIDER_COST; si no hay ninguno cargado, se
-  // muestra "—" en vez de un número engañoso.
-  const withCost=topProv.map(([label,count])=>({label,count,cost:CO_PROVIDER_COST[label.toLowerCase()]})).filter(e=>e.cost!=null);
-  const knownCount=withCost.reduce((s,e)=>s+e.count,0);
-  const totalCost=withCost.reduce((s,e)=>s+e.cost*e.count,0);
-  const avgCost=knownCount?totalCost/knownCount:null;
+  // Costo real por envío (no un promedio) — cada fila de card_envios suma el costo de
+  // SU proveedor, y ambos (costo y revenue) se agrupan por mes para poder cruzarlos.
+  const costByMonth={}, envWithoutCost=[];
+  _coEnvRows.forEach(r=>{
+    const m=(r.date||'').slice(0,7);
+    const key=(r.proveedor||'').trim().toLowerCase();
+    const cost=CO_PROVIDER_COST[key];
+    if(cost==null){ envWithoutCost.push(r); return; }
+    if(!m) return;
+    costByMonth[m]=(costByMonth[m]||0)+cost;
+  });
+  const revByMonth={};
+  cdPoints.forEach(p=>{ const m=p.date.slice(0,7); revByMonth[m]=(revByMonth[m]||0)+p.value; });
+
+  // El cruce Revenue vs Costo solo tiene sentido a partir del primer mes con datos
+  // reales de envíos — antes de eso, "costo $0" sería "no cargamos datos todavía",
+  // no "no hubo costo", y mostrarlo así infla artificialmente el neto.
+  const envMonths=_coEnvRows.map(r=>(r.date||'').slice(0,7)).filter(Boolean).sort();
+  const firstEnvMonth=envMonths[0]||null;
+  const netMonths=Object.keys(revByMonth).filter(m=>firstEnvMonth&&m>=firstEnvMonth).sort();
+  const excludedMonths=Object.keys(revByMonth).filter(m=>!firstEnvMonth||m<firstEnvMonth).sort();
+
+  const totalCost=netMonths.reduce((s,m)=>s+(costByMonth[m]||0),0);
+  const totalRevenue=netMonths.reduce((s,m)=>s+(revByMonth[m]||0),0);
+  const totalNet=totalRevenue-totalCost;
+  const costedEnvCount=totalEnv-envWithoutCost.length;
 
   document.getElementById('co-cd-kpis').innerHTML=
     kcard('Tarjetas Enviadas',fmtI(totalEnv),null,'card_envios',PAL[1])+
-    kcard('Proveedores Activos',fmtI(topProv.length),null,'Distintos en el período',PAL[2])+
-    kcard('Costo Promedio',avgCost!=null?'$'+fmtN(avgCost):'—',null,avgCost!=null?'Ponderado · '+fmtI(knownCount)+' envíos con costo':'Cargar CO_PROVIDER_COST',PAL[3])+
-    kcard('Costo Total Estimado',avgCost!=null?'$'+fmt(totalCost):'—',null,avgCost!=null?'Con costo cargado':'Faltan costos por proveedor',PAL[4]);
+    kcard('Revenue Distribución','$'+fmt(totalRevenue),null,firstEnvMonth?'Desde '+firstEnvMonth+' (con costo)':'card_distribution · pago usuarios',PAL[0])+
+    kcard('Costo Envíos',costedEnvCount?'$'+fmt(totalCost):'—',null,costedEnvCount?fmtI(costedEnvCount)+' envíos con costo cargado':'Faltan costos por proveedor',PAL[4])+
+    kcard('Neto',costedEnvCount?(totalNet>=0?'+':'-')+'$'+fmt(Math.abs(totalNet)):'—',null,'Revenue − Costo',totalNet>=0?PAL[0]:PAL[4])+
+    kcard('Proveedores Activos',fmtI(topProv.length),null,'Distintos en el período',PAL[2]);
 
   const byDate={};
   _coEnvRows.forEach(r=>{const d=r.date; if(d) byDate[d]=(byDate[d]||0)+1;});
   const envDates=Object.keys(byDate).sort();
   lineC('c-co-env-trend',envDates,[lineDS('Envíos',envDates.map(d=>byDate[d]),'rgb(96,165,250)',true)],true);
   hBarC('c-co-env-prov',topProv.map(p=>p[0]),{label:'Envíos',data:topProv.map(p=>p[1]),backgroundColor:topProv.map((_,i)=>`rgba(96,165,250,${1-i*.08})`),borderRadius:3});
+
+  // ── Tabla Revenue vs Costo — Neto por mes (solo desde el primer mes con envíos) ──
+  let netTbl=`<table><thead><tr><th>Mes</th><th class="r">Revenue (distribución)</th><th class="r">Costo (envíos)</th><th class="r">Neto</th></tr></thead><tbody>`;
+  if(!netMonths.length){
+    netTbl+=`<tr><td colspan="4"><div class="empty">Sin datos de envíos en el período — no se puede calcular el neto</div></td></tr>`;
+  } else {
+    netMonths.forEach(m=>{
+      const rev=revByMonth[m]||0, cost=costByMonth[m]||0, net=rev-cost;
+      netTbl+=`<tr><td class="mono">${m}</td><td class="r">$${fmtN(rev)}</td><td class="r">$${fmtN(cost)}</td><td class="r ${net>=0?'vp':'vn'}">${net>=0?'+':'-'}$${fmtN(Math.abs(net))}</td></tr>`;
+    });
+    netTbl+=`<tr style="border-top:1px solid var(--bd2);font-weight:700"><td>Total</td><td class="r">$${fmtN(totalRevenue)}</td><td class="r">$${fmtN(totalCost)}</td><td class="r ${totalNet>=0?'vp':'vn'}">${totalNet>=0?'+':'-'}$${fmtN(Math.abs(totalNet))}</td></tr>`;
+  }
+  netTbl+='</tbody></table>';
+  if(excludedMonths.length){
+    netTbl+=`<div style="padding:8px 2px 0;font-size:10px;color:var(--di)">ℹ️ ${excludedMonths.join(', ')} — con revenue de distribución pero sin datos de envíos todavía, excluidos del cruce (no confundir "sin dato" con "costo cero").</div>`;
+  }
+  if(envWithoutCost.length){
+    const missingProv=[...new Set(envWithoutCost.map(r=>(r.proveedor||'—').trim()))];
+    netTbl+=`<div style="padding:6px 2px 0;font-size:10px;color:var(--di)">⚠️ ${fmtI(envWithoutCost.length)} envíos sin costo cargado (proveedor sin definir en CO_PROVIDER_COST: ${missingProv.join(', ')}) — no están incluidos en el costo/neto de arriba.</div>`;
+  }
+  document.getElementById('co-net-tbl').innerHTML=netTbl;
 
   let tbl=`<table><thead><tr><th>Fecha</th><th>CR Code</th><th>Proveedor</th><th>Mes</th></tr></thead><tbody>`;
   _coEnvRows.slice().sort((a,b)=>(b.date||'').localeCompare(a.date||'')).slice(0,300).forEach(r=>{
