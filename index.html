@@ -327,6 +327,18 @@ tbody tr:hover td{background:rgba(255,255,255,.025)}
 .sort-th{cursor:pointer;user-select:none}
 .sort-th:hover{color:var(--tx)}
 
+/* ── Cardops Tab ── */
+.co-filters{
+  background:var(--s1);border:1px solid var(--bd);border-radius:var(--r);
+  padding:13px 18px;display:flex;flex-wrap:wrap;align-items:flex-end;gap:10px;
+  margin-bottom:16px;transition:.15s;
+}
+.co-filters:hover{border-color:var(--bd2)}
+.co-subnav{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:18px}
+.co-subnav .plb{height:32px;padding:0 14px;font-size:11px}
+.co-panel{display:none}
+.co-panel.on{display:block}
+
 /* ── Personal Account Tab ── */
 .pa-section-sep{display:flex;align-items:center;gap:10px;margin:24px 0 14px;padding-bottom:10px;border-bottom:1px solid var(--bd)}
 .pa-sep-icon{width:26px;height:26px;border-radius:7px;display:flex;align-items:center;justify-content:center;flex-shrink:0}
@@ -396,6 +408,11 @@ tbody tr:hover td{background:rgba(255,255,255,.025)}
   <a class="sb-link" data-tab="personal">
     <svg viewBox="0 0 15 15" fill="none"><circle cx="7.5" cy="4.5" r="2.5" stroke="currentColor" stroke-width="1.4"/><path d="M2.5 13c0-2.76 2.24-5 5-5s5 2.24 5 5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>
     Personal Account
+  </a>
+  <div class="sb-section">Card Operations</div>
+  <a class="sb-link" data-tab="cardops">
+    <svg viewBox="0 0 15 15" fill="none"><rect x="1" y="3" width="13" height="9" rx="1.5" stroke="currentColor" stroke-width="1.4"/><path d="M1 6.2h13" stroke="currentColor" stroke-width="1.4"/></svg>
+    Cardops
   </a>
   <div class="sb-footer">
     <div class="sb-av">FO</div>
@@ -739,6 +756,91 @@ tbody tr:hover td{background:rgba(255,255,255,.025)}
 
 </div><!-- /tab-approval -->
 
+<!-- ═══════ TAB: CARDOPS ═══════ -->
+<div class="tab" id="tab-cardops">
+
+  <div class="sec">
+    <div class="sec-icon" style="background:var(--pub)">
+      <svg viewBox="0 0 18 18" fill="none"><rect x="2" y="4" width="14" height="10" rx="2" stroke="#a78bfa" stroke-width="1.8"/><path d="M2 7.5h14" stroke="#a78bfa" stroke-width="1.4"/></svg>
+    </div>
+    <div><h2>Cardops</h2><p>Datos de tarjetas · proyecto Supabase "Card Ops Dash" (independiente de Payins)</p></div>
+  </div>
+
+  <!-- Filtro propio: solo rango de fechas, no aplican P&L/plataforma/cliente -->
+  <div class="co-filters">
+    <div class="fi"><label>Desde</label><input type="date" id="co-from"></div>
+    <div class="fi"><label>Hasta</label><input type="date" id="co-to"></div>
+    <button class="fbtn ok" onclick="coApplyFilters()">Aplicar</button>
+    <button class="fbtn rst" onclick="coResetFilters()">Reset</button>
+  </div>
+
+  <!-- Sub-navegación -->
+  <div class="co-subnav" id="co-subnav">
+    <button class="plb on" data-cosub="acceptance">Transactions</button>
+    <button class="plb" data-cosub="cashback">Cashback</button>
+    <button class="plb" data-cosub="cards">Card Ops</button>
+    <button class="plb" data-cosub="spendfx">Spending &amp; FX</button>
+    <button class="plb" data-cosub="fees">ATM Fees</button>
+  </div>
+
+  <!-- ── Panel: Transactions (acceptance, vía /api/acceptance) ── -->
+  <div class="co-panel on" id="co-panel-acceptance">
+    <div class="krow r5" id="co-acc-kpis"><div class="ld"><div class="sp"></div>Cargando…</div></div>
+    <div class="g2 mb">
+      <div class="card"><div class="ch"><div class="ct">Accepted / Declined / Declined by Rules — por día</div></div><canvas id="c-co-acc-trend" height="160"></canvas></div>
+      <div class="card"><div class="ch"><div class="ct">Top Países por Volumen</div></div><canvas id="c-co-acc-country" height="160"></canvas></div>
+    </div>
+    <div class="card mb">
+      <div class="ch"><div class="ct">Detalle de Transacciones</div><span class="cbadge bb" id="co-acc-badge">– txns</span></div>
+      <div class="tw" id="co-acc-tbl" style="max-height:420px"><div class="ld"><div class="sp"></div></div></div>
+    </div>
+  </div>
+
+  <!-- ── Panel: Cashback (cashback_b2b + cashback_b2c) ── -->
+  <div class="co-panel" id="co-panel-cashback">
+    <div class="fi" style="margin-bottom:14px">
+      <label>Vista</label>
+      <div class="pl-btns" id="co-cb-toggle">
+        <button class="plb on" data-cbmode="both">Ambos</button>
+        <button class="plb" data-cbmode="b2b">B2B</button>
+        <button class="plb" data-cbmode="b2c">B2C</button>
+      </div>
+    </div>
+    <div class="krow" id="co-cb-kpis"><div class="ld"><div class="sp"></div>Cargando…</div></div>
+    <div class="card mb"><div class="ch"><div class="ct">Cashback Pagado por Día — B2B vs B2C</div></div><canvas id="c-co-cb-trend" height="170"></canvas></div>
+    <div class="card mb"><div class="ch"><div class="ct">Detalle Diario</div></div><div class="tw" id="co-cb-tbl"><div class="ld"><div class="sp"></div></div></div></div>
+  </div>
+
+  <!-- ── Panel: Card Ops (card_envios = costo, card_distribution = revenue) — costo por proveedor cargado manualmente, ver CO_PROVIDER_COST ── -->
+  <div class="co-panel" id="co-panel-cards">
+    <div class="krow r5" id="co-cd-kpis"><div class="ld"><div class="sp"></div>Cargando…</div></div>
+    <div class="g2 mb">
+      <div class="card"><div class="ch"><div class="ct">Envíos por Día</div></div><canvas id="c-co-env-trend" height="160"></canvas></div>
+      <div class="card"><div class="ch"><div class="ct">Envíos por Proveedor</div></div><canvas id="c-co-env-prov" height="160"></canvas></div>
+    </div>
+    <div class="card mb"><div class="ch"><div class="ct">Revenue vs Costo — Neto por Mes</div></div><div class="tw" id="co-net-tbl"><div class="ld"><div class="sp"></div></div></div></div>
+    <div class="card mb"><div class="ch"><div class="ct">Envíos — Detalle</div></div><div class="tw" id="co-env-tbl"><div class="ld"><div class="sp"></div></div></div></div>
+  </div>
+
+  <!-- ── Panel: Spending & FX (daily_spending_view + fx_rate) ── -->
+  <div class="co-panel" id="co-panel-spendfx">
+    <div class="krow" id="co-sf-kpis"><div class="ld"><div class="sp"></div>Cargando…</div></div>
+    <div class="g2 mb">
+      <div class="card"><div class="ch"><div class="ct">Spending Diario</div></div><canvas id="c-co-spend-trend" height="160"></canvas></div>
+      <div class="card"><div class="ch"><div class="ct">FX Rate Diario</div></div><canvas id="c-co-fx-trend" height="160"></canvas></div>
+    </div>
+    <div class="card mb"><div class="ch"><div class="ct">Detalle Diario</div></div><div class="tw" id="co-sf-tbl"><div class="ld"><div class="sp"></div></div></div></div>
+  </div>
+
+  <!-- ── Panel: ATM Fees (atm_fees_daily) ── -->
+  <div class="co-panel" id="co-panel-fees">
+    <div class="krow" id="co-fee-kpis"><div class="ld"><div class="sp"></div>Cargando…</div></div>
+    <div class="card mb"><div class="ch"><div class="ct">Fees por Día</div></div><canvas id="c-co-fee-trend" height="170"></canvas></div>
+    <div class="card mb"><div class="ch"><div class="ct">Detalle Diario</div></div><div class="tw" id="co-fee-tbl"><div class="ld"><div class="sp"></div></div></div></div>
+  </div>
+
+</div><!-- /tab-cardops -->
+
 </div><!-- /page -->
 </div><!-- /main -->
 
@@ -769,6 +871,15 @@ const SB = createClient(
   'https://nxggmbqozaziketgkktj.supabase.co',
   'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im54Z2dtYnFvemF6aWtldGdra3RqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzYyMDEwNDMsImV4cCI6MjA5MTc3NzA0M30.CI9YX7ztFvxgCg1gsTCcJAtLS5F4tDxo1a-_zdWpC_Y'
 );
+
+// ── Segundo proyecto Supabase — "Card Ops Dash" (datos de tarjetas, independiente de Payins) ──
+// Sin sesión de auth propia: el acceso es vía políticas RLS para el rol `anon` (no `authenticated`,
+// no hay login contra este segundo proyecto). Solo se usa el anon/publishable key, nunca la secret key.
+const SB_CARDOPS = createClient(
+  'https://imjowbxegzyzuoqftidr.supabase.co',
+  'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imltam93YnhlZ3p5enVvcWZ0aWRyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODI4MzI1MDEsImV4cCI6MjA5ODQwODUwMX0.DdK2GRb_lIEjHlNHuWxx_t2m_bFYutflHRJvYWvBSbw'
+);
+
 Chart.register(ChartDataLabels);
 
 // ══════════════════════════════════════
@@ -806,6 +917,12 @@ let TAB = 'overview';
 const CI= {};
 const AC= {};
 
+// ── Cardops: estado propio (filtro de fecha independiente del filtro global) ──
+let CO    = {from:null,to:null};
+let COSUB = 'acceptance';
+let COCB  = 'both'; // toggle del sub-tab Cashback: 'both' | 'b2b' | 'b2c'
+let PAYINS_TOKEN = null; // access_token de la sesión de Payins, usado para autenticar /api/acceptance
+
 function acShow(id){
   const inp=document.getElementById(id);
   const drop=document.getElementById(id+'-drop');
@@ -840,6 +957,46 @@ const uniqs= (a,k)=>[...new Set(a.map(r=>r[k]).filter(Boolean))].sort();
 const pct  = (a,b)=>b?(((a-b)/b)*100):null;
 const dc   = id=>{if(CI[id]){CI[id].destroy();delete CI[id]}};
 const LD   = '<div class="ld"><div class="sp"></div>Cargando…</div>';
+
+// ══════════════════════════════════════
+// CARDOPS UTILS
+// ══════════════════════════════════════
+// Tablas "wide" (year_num, month_num, month_name, day_1..day_31) → serie diaria [{date,value}]
+function unpivotDaily(rows, valuePrefix='day_'){
+  const out=[];
+  (rows||[]).forEach(r=>{
+    const y=+r.year_num, m=+r.month_num;
+    if(!y||!m) return;
+    const daysInMonth=new Date(y,m,0).getDate();
+    for(let d=1; d<=Math.min(31,daysInMonth); d++){
+      const v=r[valuePrefix+d];
+      if(v===null||v===undefined) continue;
+      out.push({date:`${y}-${String(m).padStart(2,'0')}-${String(d).padStart(2,'0')}`, value:+v});
+    }
+  });
+  return out.sort((a,b)=>a.date<b.date?-1:a.date>b.date?1:0);
+}
+// Agregación sobre la salida de unpivotDaily — 'sum' para fees/cashback/distribución, 'last'/'avg' para fx_rate (es una tasa, no se suma)
+function aggDaily(points, mode='sum'){
+  if(!points.length) return mode==='sum'?0:null;
+  if(mode==='last') return points[points.length-1].value;
+  if(mode==='avg')  return points.reduce((s,p)=>s+p.value,0)/points.length;
+  return points.reduce((s,p)=>s+p.value,0);
+}
+function coFilterRange(points, from, to){
+  return points.filter(p=>(!from||p.date>=from)&&(!to||p.date<=to));
+}
+// Fórmula de negocio confirmada por Ontop para clasificar una transacción de `acceptance`:
+// 1) si msgstatusreason contiene "declined" → declined, si no → accepted
+// 2) si outputtag = "decline" Y el paso 1 dio accepted → se reclasifica a declined_by_rules
+// Nota: el valor real en la tabla es "Decline" (no "Declined") — confirmado sobre 2000+
+// filas reales, los únicos valores de outputtag son "Approved" y "Decline".
+function classifyAcceptance(row){
+  const reason=(row.msgstatusreason||'').toLowerCase();
+  let status = reason.includes('declined') ? 'declined' : 'accepted';
+  if(status==='accepted' && (row.outputtag||'').toLowerCase()==='decline') status='declined_by_rules';
+  return status;
+}
 
 // ══════════════════════════════════════
 // FETCH  (P&L/FCF y plataforma multi filtrados client-side o server-side)
@@ -1108,8 +1265,8 @@ function loadTab(t){
   const vrnFi       =document.getElementById('fi-vrn');
   const accMgrFi    =document.getElementById('fi-accMgr');
   const globalFilters=document.getElementById('filters');
-  // Hide the global filter strip on the Approval Times tab (it has its own filters)
-  if(globalFilters) globalFilters.style.display = t==='approval' ? 'none' : '';
+  // Hide the global filter strip on tabs with their own filters (Approval Times, Cardops)
+  if(globalFilters) globalFilters.style.display = (t==='approval'||t==='cardops') ? 'none' : '';
   if(platFi)   platFi.style.display   = t==='vrn'     ? 'none' : '';
   if(vrnFi)    vrnFi.style.display    = t==='revenue'  ? 'none' : '';
   if(accMgrFi) accMgrFi.style.display = (t==='vrn'||t==='clientes') ? '' : 'none';
@@ -1119,6 +1276,7 @@ function loadTab(t){
   if(t==='clientes') return loadClientes();
   if(t==='approval') return loadApproval();
   if(t==='personal') return loadPersonalAccount();
+  if(t==='cardops')  return loadCoSubtab(COSUB);
 }
 
 // ══════════════════════════════════════
@@ -2318,6 +2476,7 @@ async function startApp(session){
   hideLogin();
   setUserInfo(session.user);
   setupRealtime();
+  PAYINS_TOKEN=session.access_token;
   const now=new Date(),start=new Date(now.getFullYear(),now.getMonth()-3,1);
   document.getElementById('fFrom').value=start.toISOString().slice(0,10);
   document.getElementById('fTo').value=now.toISOString().slice(0,10);
@@ -2328,6 +2487,13 @@ async function startApp(session){
   const atToEl=document.getElementById('at-to');
   if(atFromEl&&!atFromEl.value) atFromEl.value=start.toISOString().slice(0,10);
   if(atToEl&&!atToEl.value)     atToEl.value=now.toISOString().slice(0,10);
+  // Inicializar fechas del tab Cardops (sus propios inputs)
+  const coFromEl=document.getElementById('co-from');
+  const coToEl=document.getElementById('co-to');
+  if(coFromEl&&!coFromEl.value) coFromEl.value=start.toISOString().slice(0,10);
+  if(coToEl&&!coToEl.value)     coToEl.value=now.toISOString().slice(0,10);
+  CO.from=coFromEl?coFromEl.value:null;
+  CO.to  =coToEl?coToEl.value:null;
   await loadFilters();
   loadOverview();
 }
@@ -2691,9 +2857,391 @@ async function chatSend(){
   document.getElementById('chat-send').disabled=false;
 }
 
+// ══════════════════════════════════════
+// CARDOPS
+// ══════════════════════════════════════
+
+// ── Sub-nav (Transactions / Cashback / Card Ops / Spending & FX / ATM Fees) ──
+document.querySelectorAll('#co-subnav .plb[data-cosub]').forEach(b=>{
+  b.addEventListener('click',()=>{
+    document.querySelectorAll('#co-subnav .plb').forEach(x=>x.classList.remove('on'));
+    b.classList.add('on');
+    COSUB=b.dataset.cosub;
+    document.querySelectorAll('.co-panel').forEach(x=>x.classList.remove('on'));
+    document.getElementById('co-panel-'+COSUB).classList.add('on');
+    loadCoSubtab(COSUB);
+  });
+});
+
+// ── Toggle B2B/B2C/Ambos del sub-tab Cashback (solo re-renderiza, no refetch) ──
+document.querySelectorAll('#co-cb-toggle .plb[data-cbmode]').forEach(b=>{
+  b.addEventListener('click',()=>{
+    document.querySelectorAll('#co-cb-toggle .plb').forEach(x=>x.classList.remove('on'));
+    b.classList.add('on');
+    COCB=b.dataset.cbmode;
+    renderCoCashback();
+  });
+});
+
+function loadCoSubtab(sub){
+  if(sub==='acceptance') return loadCoAcceptance();
+  if(sub==='cashback')   return loadCoCashback();
+  if(sub==='cards')      return loadCoCards();
+  if(sub==='spendfx')    return loadCoSpendFx();
+  if(sub==='fees')       return loadCoFees();
+}
+function coApplyFilters(){
+  CO.from=document.getElementById('co-from').value||null;
+  CO.to  =document.getElementById('co-to').value||null;
+  loadCoSubtab(COSUB);
+}
+function coResetFilters(){
+  const now=new Date(),start=new Date(now.getFullYear(),now.getMonth()-3,1);
+  document.getElementById('co-from').value=start.toISOString().slice(0,10);
+  document.getElementById('co-to').value=now.toISOString().slice(0,10);
+  coApplyFilters();
+}
+
+// ── Transactions (acceptance) — vía backend seguro, la tabla tiene PII ──
+let _coAccData=null;
+async function coFetchAcceptance(){
+  const from=CO.from||(()=>{const d=new Date();d.setMonth(d.getMonth()-3);return d.toISOString().slice(0,10);})();
+  const to=CO.to||new Date().toISOString().slice(0,10);
+  const res=await fetch(`/api/acceptance?from=${from}&to=${to}`,{
+    headers:{Authorization:'Bearer '+(PAYINS_TOKEN||'')}
+  });
+  if(!res.ok){
+    const msg=await res.text().catch(()=>res.statusText);
+    throw new Error(`API /api/acceptance ${res.status}: ${msg}`);
+  }
+  return await res.json();
+}
+async function loadCoAcceptance(){
+  document.getElementById('co-acc-kpis').innerHTML=LD;
+  document.getElementById('co-acc-tbl').innerHTML=LD;
+  let payload;
+  try{ payload=await coFetchAcceptance(); }
+  catch(e){
+    document.getElementById('co-acc-kpis').innerHTML=`<div class="empty" style="color:var(--re);padding:20px">⚠️ ${e.message}</div>`;
+    document.getElementById('co-acc-tbl').innerHTML='';
+    return;
+  }
+  const summary=payload.summary;
+  const rows=payload.rows||[];
+  _coAccData=rows;
+  if(!summary || !summary.total_txns){
+    document.getElementById('co-acc-kpis').innerHTML='<div class="empty">Sin transacciones en el período seleccionado</div>';
+    document.getElementById('co-acc-tbl').innerHTML='';
+    return;
+  }
+
+  // Los totales/porcentajes/serie diaria/top países vienen YA calculados desde la base
+  // (función SQL `acceptance_summary`, ver SETUP.md 9.5) — la tabla tiene 200k+ filas por
+  // trimestre y Supabase capea cada request a ~1000 filas, así que calcular esto acá con
+  // una muestra daría números incorrectos. La tabla de detalle sí usa `rows` (muestra reciente).
+  const total=+summary.total_txns, accepted=+summary.accepted_txns,
+        declined=+summary.declined_txns, declinedRules=+summary.declined_by_rules_txns,
+        volume=+summary.total_volume||0;
+
+  document.getElementById('co-acc-kpis').innerHTML=
+    kcard('Transacciones',fmtI(total),null,'Únicas · threddtransactionid',PAL[0])+
+    kcard('Accepted',((accepted/total*100)||0).toFixed(1)+'%',null,fmtI(accepted)+' txns',PAL[0])+
+    kcard('Declined',((declined/total*100)||0).toFixed(1)+'%',null,fmtI(declined)+' txns',PAL[4])+
+    kcard('Declined by Rules',((declinedRules/total*100)||0).toFixed(1)+'%',null,fmtI(declinedRules)+' txns',PAL[3])+
+    kcard('Volumen (billing)','$'+fmt(volume),null,'amount_billingvalue',PAL[1]);
+
+  const daily=summary.daily||[];
+  const dates=[...new Set(daily.map(d=>d.day))].sort();
+  const seriesFor=st=>dates.map(d=>{
+    const row=daily.find(r=>r.day===d&&r.status===st);
+    return row?+row.cnt:0;
+  });
+  lineC('c-co-acc-trend',dates,[
+    lineDS('Accepted',seriesFor('accepted'),'rgb(34,197,94)'),
+    lineDS('Declined',seriesFor('declined'),'rgb(239,68,68)'),
+    lineDS('Declined by Rules',seriesFor('declined_by_rules'),'rgb(251,191,36)')
+  ],true);
+
+  const topC=(summary.top_countries||[]).slice(0,10);
+  hBarC('c-co-acc-country',topC.map(c=>c.country||'—'),{label:'Volumen',data:topC.map(c=>+c.volume||0),backgroundColor:topC.map((_,i)=>`rgba(167,139,250,${1-i*.08})`),borderRadius:3});
+
+  document.getElementById('co-acc-badge').textContent=fmtI(total)+' txns';
+  const badge=st=>st==='accepted'?'<span class="cbadge bg">Accepted</span>'
+    :st==='declined'?'<span class="cbadge br">Declined</span>'
+    :'<span class="cbadge" style="background:var(--amb);color:var(--am)">Declined by Rules</span>';
+  let tbl=`<table><thead><tr><th>Fecha</th><th>Estado</th><th class="r">Monto</th><th>País</th><th>Producto</th></tr></thead><tbody>`;
+  if(!rows.length){
+    tbl+=`<tr><td colspan="5"><div class="empty">Sin transacciones recientes para mostrar en el detalle</div></td></tr>`;
+  } else {
+    rows.forEach(r=>{
+      const st=classifyAcceptance(r);
+      const t=r.eventtime||r.localdatetime||'';
+      tbl+=`<tr><td style="color:var(--mu);font-size:10px;white-space:nowrap">${t.replace('T',' ').slice(0,19)}</td><td>${badge(st)}</td><td class="r">${fmtN(r.amount_billingvalue)} ${r.amount_billingcurrency||''}</td><td>${r.merchantcountry||'–'}</td><td>${r.cardproducttype||'–'}</td></tr>`;
+    });
+  }
+  tbl+='</tbody></table>';
+  document.getElementById('co-acc-tbl').innerHTML=tbl;
+}
+
+// ── Cashback (cashback_b2b + cashback_b2c) ──
+let _coCbB2B=[], _coCbB2C=[];
+async function loadCoCashback(){
+  document.getElementById('co-cb-kpis').innerHTML=LD;
+  document.getElementById('co-cb-tbl').innerHTML=LD;
+  try{
+    const [{data:b2b,error:e1},{data:b2c,error:e2}]=await Promise.all([
+      SB_CARDOPS.from('cashback_b2b').select('*'),
+      SB_CARDOPS.from('cashback_b2c').select('*')
+    ]);
+    if(e1) throw e1;
+    if(e2) throw e2;
+    _coCbB2B=coFilterRange(unpivotDaily(b2b||[]),CO.from,CO.to);
+    _coCbB2C=coFilterRange(unpivotDaily(b2c||[]),CO.from,CO.to);
+  }catch(e){
+    document.getElementById('co-cb-kpis').innerHTML=`<div class="empty" style="color:var(--re);padding:20px">⚠️ Supabase error: ${e.message||e.code||JSON.stringify(e)}<br><span style="font-size:10px;color:var(--di)">Check RLS policies (anon) on cashback_b2b / cashback_b2c — proyecto Card Ops Dash</span></div>`;
+    document.getElementById('co-cb-tbl').innerHTML='';
+    return;
+  }
+  renderCoCashback();
+}
+function renderCoCashback(){
+  const b2b=_coCbB2B, b2c=_coCbB2C;
+  const totalB2B=aggDaily(b2b,'sum'), totalB2C=aggDaily(b2c,'sum');
+  const shown = COCB==='b2b'?totalB2B : COCB==='b2c'?totalB2C : totalB2B+totalB2C;
+  const days=Math.max(b2b.length,b2c.length,1);
+  document.getElementById('co-cb-kpis').innerHTML=
+    kcard('Cashback Mostrado','$'+fmt(shown),null,COCB==='both'?'B2B + B2C':COCB.toUpperCase(),PAL[0])+
+    kcard('Cashback B2B','$'+fmt(totalB2B),null,'Total período',PAL[1])+
+    kcard('Cashback B2C','$'+fmt(totalB2C),null,'Total período',PAL[2])+
+    kcard('Promedio Diario','$'+fmt(shown/days),null,days+' días',PAL[3]);
+
+  const dates=[...new Set([...b2b.map(p=>p.date),...b2c.map(p=>p.date)])].sort();
+  const mapB2B=Object.fromEntries(b2b.map(p=>[p.date,p.value]));
+  const mapB2C=Object.fromEntries(b2c.map(p=>[p.date,p.value]));
+  lineC('c-co-cb-trend',dates,[
+    lineDS('B2B',dates.map(d=>mapB2B[d]||0),'rgb(34,197,94)'),
+    lineDS('B2C',dates.map(d=>mapB2C[d]||0),'rgb(96,165,250)')
+  ]);
+
+  let tbl=`<table><thead><tr><th>Fecha</th><th class="r">B2B</th><th class="r">B2C</th><th class="r">Total</th></tr></thead><tbody>`;
+  dates.slice(-90).reverse().forEach(d=>{
+    const vb=mapB2B[d]||0, vc=mapB2C[d]||0;
+    tbl+=`<tr><td class="mono">${d}</td><td class="r">${fmtN(vb)}</td><td class="r">${fmtN(vc)}</td><td class="r" style="font-weight:700">${fmtN(vb+vc)}</td></tr>`;
+  });
+  tbl+='</tbody></table>';
+  document.getElementById('co-cb-tbl').innerHTML=tbl;
+}
+
+// ── Card Ops (card_distribution + card_envios) ──
+let _coEnvRows=[];
+// Costo fijo por envío, por proveedor (USD) — dato de negocio, no viene de Supabase
+// (card_envios no tiene columna de costo). Key en minúsculas, mismo criterio de
+// normalización que agrupa variantes de casing (ej. "clicoh"/"Clicoh").
+const CO_PROVIDER_COST = {
+  'dhl': 42,
+  'melon': 5,
+  'clicoh': 8,
+};
+
+async function loadCoCards(){
+  document.getElementById('co-cd-kpis').innerHTML=LD;
+  document.getElementById('co-net-tbl').innerHTML=LD;
+  document.getElementById('co-env-tbl').innerHTML=LD;
+  let cdPoints=[];
+  try{
+    let rows=[],from=0;
+    while(true){
+      let q=SB_CARDOPS.from('card_envios').select('*').range(from,from+4998);
+      if(CO.from) q=q.gte('date',CO.from);
+      if(CO.to)   q=q.lte('date',CO.to);
+      const {data,error}=await q;
+      if(error) throw error;
+      if(!data?.length) break;
+      rows=rows.concat(data);
+      if(data.length<4999) break;
+      from+=4999;
+    }
+    _coEnvRows=rows;
+
+    // Revenue por distribución de tarjetas (card_distribution) — es el pago que hacen
+    // los usuarios, NO cantidad de tarjetas. Se cruza por mes contra el costo de envíos.
+    const {data:cd,error:e2}=await SB_CARDOPS.from('card_distribution').select('*');
+    if(e2) throw e2;
+    cdPoints=coFilterRange(unpivotDaily(cd||[]),CO.from,CO.to);
+  }catch(e){
+    document.getElementById('co-cd-kpis').innerHTML=`<div class="empty" style="color:var(--re);padding:20px">⚠️ Supabase error: ${e.message||e.code||JSON.stringify(e)}<br><span style="font-size:10px;color:var(--di)">Check RLS policies (anon) on card_envios / card_distribution — proyecto Card Ops Dash</span></div>`;
+    document.getElementById('co-net-tbl').innerHTML='';
+    document.getElementById('co-env-tbl').innerHTML='';
+    return;
+  }
+
+  const totalEnv=_coEnvRows.length;
+  // Agrupa proveedores ignorando mayúsculas/minúsculas (ej. "clicoh" y "Clicoh" son el
+  // mismo proveedor) — se muestra la variante de casing más frecuente como etiqueta.
+  const provGroups={};
+  _coEnvRows.forEach(r=>{
+    const raw=(r.proveedor||'—').trim();
+    const key=raw.toLowerCase();
+    if(!provGroups[key]) provGroups[key]={count:0,labels:{}};
+    provGroups[key].count++;
+    provGroups[key].labels[raw]=(provGroups[key].labels[raw]||0)+1;
+  });
+  const topProv=Object.values(provGroups)
+    .map(g=>[Object.entries(g.labels).sort((a,b)=>b[1]-a[1])[0][0], g.count])
+    .sort((a,b)=>b[1]-a[1]);
+
+  // Costo real por envío (no un promedio) — cada fila de card_envios suma el costo de
+  // SU proveedor, y ambos (costo y revenue) se agrupan por mes para poder cruzarlos.
+  const costByMonth={}, envWithoutCost=[];
+  _coEnvRows.forEach(r=>{
+    const m=(r.date||'').slice(0,7);
+    const key=(r.proveedor||'').trim().toLowerCase();
+    const cost=CO_PROVIDER_COST[key];
+    if(cost==null){ envWithoutCost.push(r); return; }
+    if(!m) return;
+    costByMonth[m]=(costByMonth[m]||0)+cost;
+  });
+  const revByMonth={};
+  cdPoints.forEach(p=>{ const m=p.date.slice(0,7); revByMonth[m]=(revByMonth[m]||0)+p.value; });
+
+  // El cruce Revenue vs Costo solo tiene sentido a partir del primer mes con datos
+  // reales de envíos — antes de eso, "costo $0" sería "no cargamos datos todavía",
+  // no "no hubo costo", y mostrarlo así infla artificialmente el neto.
+  const envMonths=_coEnvRows.map(r=>(r.date||'').slice(0,7)).filter(Boolean).sort();
+  const firstEnvMonth=envMonths[0]||null;
+  const netMonths=Object.keys(revByMonth).filter(m=>firstEnvMonth&&m>=firstEnvMonth).sort();
+  const excludedMonths=Object.keys(revByMonth).filter(m=>!firstEnvMonth||m<firstEnvMonth).sort();
+
+  const totalCost=netMonths.reduce((s,m)=>s+(costByMonth[m]||0),0);
+  const totalRevenue=netMonths.reduce((s,m)=>s+(revByMonth[m]||0),0);
+  const totalNet=totalRevenue-totalCost;
+  const costedEnvCount=totalEnv-envWithoutCost.length;
+
+  document.getElementById('co-cd-kpis').innerHTML=
+    kcard('Tarjetas Enviadas',fmtI(totalEnv),null,'card_envios',PAL[1])+
+    kcard('Revenue Distribución','$'+fmt(totalRevenue),null,firstEnvMonth?'Desde '+firstEnvMonth+' (con costo)':'card_distribution · pago usuarios',PAL[0])+
+    kcard('Costo Envíos',costedEnvCount?'$'+fmt(totalCost):'—',null,costedEnvCount?fmtI(costedEnvCount)+' envíos con costo cargado':'Faltan costos por proveedor',PAL[4])+
+    kcard('Neto',costedEnvCount?(totalNet>=0?'+':'-')+'$'+fmt(Math.abs(totalNet)):'—',null,'Revenue − Costo',totalNet>=0?PAL[0]:PAL[4])+
+    kcard('Proveedores Activos',fmtI(topProv.length),null,'Distintos en el período',PAL[2]);
+
+  const byDate={};
+  _coEnvRows.forEach(r=>{const d=r.date; if(d) byDate[d]=(byDate[d]||0)+1;});
+  const envDates=Object.keys(byDate).sort();
+  lineC('c-co-env-trend',envDates,[lineDS('Envíos',envDates.map(d=>byDate[d]),'rgb(96,165,250)',true)],true);
+  hBarC('c-co-env-prov',topProv.map(p=>p[0]),{label:'Envíos',data:topProv.map(p=>p[1]),backgroundColor:topProv.map((_,i)=>`rgba(96,165,250,${1-i*.08})`),borderRadius:3});
+
+  // ── Tabla Revenue vs Costo — Neto por mes (solo desde el primer mes con envíos) ──
+  let netTbl=`<table><thead><tr><th>Mes</th><th class="r">Revenue (distribución)</th><th class="r">Costo (envíos)</th><th class="r">Neto</th></tr></thead><tbody>`;
+  if(!netMonths.length){
+    netTbl+=`<tr><td colspan="4"><div class="empty">Sin datos de envíos en el período — no se puede calcular el neto</div></td></tr>`;
+  } else {
+    netMonths.forEach(m=>{
+      const rev=revByMonth[m]||0, cost=costByMonth[m]||0, net=rev-cost;
+      netTbl+=`<tr><td class="mono">${m}</td><td class="r">$${fmtN(rev)}</td><td class="r">$${fmtN(cost)}</td><td class="r ${net>=0?'vp':'vn'}">${net>=0?'+':'-'}$${fmtN(Math.abs(net))}</td></tr>`;
+    });
+    netTbl+=`<tr style="border-top:1px solid var(--bd2);font-weight:700"><td>Total</td><td class="r">$${fmtN(totalRevenue)}</td><td class="r">$${fmtN(totalCost)}</td><td class="r ${totalNet>=0?'vp':'vn'}">${totalNet>=0?'+':'-'}$${fmtN(Math.abs(totalNet))}</td></tr>`;
+  }
+  netTbl+='</tbody></table>';
+  if(excludedMonths.length){
+    netTbl+=`<div style="padding:8px 2px 0;font-size:10px;color:var(--di)">ℹ️ ${excludedMonths.join(', ')} — con revenue de distribución pero sin datos de envíos todavía, excluidos del cruce (no confundir "sin dato" con "costo cero").</div>`;
+  }
+  if(envWithoutCost.length){
+    const missingProv=[...new Set(envWithoutCost.map(r=>(r.proveedor||'—').trim()))];
+    netTbl+=`<div style="padding:6px 2px 0;font-size:10px;color:var(--di)">⚠️ ${fmtI(envWithoutCost.length)} envíos sin costo cargado (proveedor sin definir en CO_PROVIDER_COST: ${missingProv.join(', ')}) — no están incluidos en el costo/neto de arriba.</div>`;
+  }
+  document.getElementById('co-net-tbl').innerHTML=netTbl;
+
+  let tbl=`<table><thead><tr><th>Fecha</th><th>CR Code</th><th>Proveedor</th><th>Mes</th></tr></thead><tbody>`;
+  _coEnvRows.slice().sort((a,b)=>(b.date||'').localeCompare(a.date||'')).slice(0,300).forEach(r=>{
+    tbl+=`<tr><td class="mono">${r.date||'–'}</td><td class="mono">${r.cr_code||'–'}</td><td>${r.proveedor||'–'}</td><td>${r.month||'–'}</td></tr>`;
+  });
+  tbl+='</tbody></table>';
+  document.getElementById('co-env-tbl').innerHTML=tbl;
+}
+
+// ── Spending & FX (daily_spending_view + fx_rate) ──
+let _coSpendRows=[], _coFxPoints=[];
+async function loadCoSpendFx(){
+  document.getElementById('co-sf-kpis').innerHTML=LD;
+  document.getElementById('co-sf-tbl').innerHTML=LD;
+  try{
+    let q=SB_CARDOPS.from('daily_spending_view').select('*');
+    if(CO.from) q=q.gte('fecha',CO.from);
+    if(CO.to)   q=q.lte('fecha',CO.to);
+    const {data:spend,error:e1}=await q;
+    if(e1) throw e1;
+    _coSpendRows=(spend||[]).slice().sort((a,b)=>(a.fecha||'').localeCompare(b.fecha||''));
+
+    const {data:fx,error:e2}=await SB_CARDOPS.from('fx_rate').select('*');
+    if(e2) throw e2;
+    _coFxPoints=coFilterRange(unpivotDaily(fx||[]),CO.from,CO.to);
+  }catch(e){
+    document.getElementById('co-sf-kpis').innerHTML=`<div class="empty" style="color:var(--re);padding:20px">⚠️ Supabase error: ${e.message||e.code||JSON.stringify(e)}<br><span style="font-size:10px;color:var(--di)">Check RLS policies (anon) on daily_spending_view / fx_rate — proyecto Card Ops Dash</span></div>`;
+    document.getElementById('co-sf-tbl').innerHTML='';
+    return;
+  }
+
+  const totalSpend=sum(_coSpendRows,'spending');
+  const totalIf=sum(_coSpendRows,'if_amount');
+  const avgPct=_coSpendRows.length? sum(_coSpendRows,'percentage')/_coSpendRows.length : 0;
+  const currentFx=aggDaily(_coFxPoints,'last');
+
+  document.getElementById('co-sf-kpis').innerHTML=
+    kcard('Spending Total','$'+fmt(totalSpend),null,'daily_spending_view',PAL[0])+
+    kcard('IF Amount Total','$'+fmt(totalIf),null,'Período seleccionado',PAL[1])+
+    kcard('% Promedio',avgPct.toFixed(1)+'%',null,'percentage promedio',PAL[2])+
+    kcard('FX Rate Actual',currentFx!=null?fmtN(currentFx):'–',null,'Último valor del período',PAL[3]);
+
+  lineC('c-co-spend-trend',_coSpendRows.map(r=>r.fecha),[lineDS('Spending',_coSpendRows.map(r=>+r.spending||0),'rgb(34,197,94)',true)]);
+  lineC('c-co-fx-trend',_coFxPoints.map(p=>p.date),[lineDS('FX Rate',_coFxPoints.map(p=>p.value),'rgb(96,165,250)',true)]);
+
+  let tbl=`<table><thead><tr><th>Fecha</th><th>Mes</th><th class="r">Spending</th><th class="r">IF Amount</th><th class="r">%</th></tr></thead><tbody>`;
+  _coSpendRows.slice().reverse().slice(0,300).forEach(r=>{
+    tbl+=`<tr><td class="mono">${r.fecha||'–'}</td><td style="color:var(--mu)">${r.month||'–'}</td><td class="r">${fmtN(r.spending)}</td><td class="r">${fmtN(r.if_amount)}</td><td class="r">${(+r.percentage||0).toFixed(1)}%</td></tr>`;
+  });
+  tbl+='</tbody></table>';
+  document.getElementById('co-sf-tbl').innerHTML=tbl;
+}
+
+// ── ATM Fees (atm_fees_daily) ──
+let _coFeePoints=[];
+async function loadCoFees(){
+  document.getElementById('co-fee-kpis').innerHTML=LD;
+  document.getElementById('co-fee-tbl').innerHTML=LD;
+  try{
+    const {data,error}=await SB_CARDOPS.from('atm_fees_daily').select('*');
+    if(error) throw error;
+    _coFeePoints=coFilterRange(unpivotDaily(data||[]),CO.from,CO.to);
+  }catch(e){
+    document.getElementById('co-fee-kpis').innerHTML=`<div class="empty" style="color:var(--re);padding:20px">⚠️ Supabase error: ${e.message||e.code||JSON.stringify(e)}<br><span style="font-size:10px;color:var(--di)">Check RLS policies (anon) on atm_fees_daily — proyecto Card Ops Dash</span></div>`;
+    document.getElementById('co-fee-tbl').innerHTML='';
+    return;
+  }
+
+  const total=aggDaily(_coFeePoints,'sum');
+  const avg=_coFeePoints.length?total/_coFeePoints.length:0;
+  const peak=_coFeePoints.reduce((m,p)=>p.value>(m?.value??-Infinity)?p:m,null);
+
+  document.getElementById('co-fee-kpis').innerHTML=
+    kcard('Fees Total','$'+fmt(total),null,'Suma del período',PAL[0])+
+    kcard('Promedio Diario','$'+fmt(avg),null,_coFeePoints.length+' días',PAL[1])+
+    kcard('Día Pico',peak?'$'+fmt(peak.value):'–',null,peak?peak.date:'–',PAL[3]);
+
+  barC('c-co-fee-trend',_coFeePoints.map(p=>p.date),[{label:'Fees',data:_coFeePoints.map(p=>p.value),backgroundColor:'rgba(34,197,94,.55)',borderRadius:3}]);
+
+  let tbl=`<table><thead><tr><th>Fecha</th><th class="r">Fee</th></tr></thead><tbody>`;
+  _coFeePoints.slice().reverse().slice(0,300).forEach(p=>{
+    tbl+=`<tr><td class="mono">${p.date}</td><td class="r">${fmtN(p.value)}</td></tr>`;
+  });
+  tbl+='</tbody></table>';
+  document.getElementById('co-fee-tbl').innerHTML=tbl;
+}
+
 SB.auth.onAuthStateChange(async(event,session)=>{
   if(event==='INITIAL_SESSION'||event==='SIGNED_IN'){
     if(session) await startApp(session);
+  } else if(event==='TOKEN_REFRESHED'){
+    if(session) PAYINS_TOKEN=session.access_token;
   } else if(event==='SIGNED_OUT'){
     showLogin();
   }

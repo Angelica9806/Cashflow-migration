@@ -123,4 +123,155 @@ Para que el redirect de Google OAuth funcione desde localhost, agregar `http://l
 
 ---
 
-*Última actualización: 2026-05-25*
+## 9 · Cardops — proyecto Supabase "Card Ops Dash"
+
+El tab **Cardops** vive en el mismo `index.html`, pero se alimenta de un **segundo proyecto Supabase independiente** (`Card Ops Dash`, `https://imjowbxegzyzuoqftidr.supabase.co`), sin login propio: el acceso es 100% vía políticas RLS para el rol `anon` (no `authenticated` — no hay sesión de Auth contra ese proyecto).
+
+### 9.1 · Completar el anon key en el código
+
+En `index.html`, buscar `SB_CARDOPS` y reemplazar el placeholder:
+
+```js
+const SB_CARDOPS = createClient(
+  'https://imjowbxegzyzuoqftidr.supabase.co',
+  'CARDOPS_ANON_KEY_AQUI' // ← reemplazar por el anon/publishable key real
+);
+```
+
+El key se obtiene en **Card Ops Dash → Settings → API Keys → anon/public**. **Nunca** usar ahí la `secret key` (bypasea RLS por completo y da acceso total a la base — solo se usa server-side, ver 9.3).
+
+### 9.2 · Políticas RLS (rol `anon`) para las 7 tablas/vista de acceso directo
+
+Correr en el SQL Editor del proyecto **Card Ops Dash** (repetir el bloque `CREATE POLICY` por cada tabla):
+
+```sql
+alter table atm_fees_daily      enable row level security;
+alter table card_distribution   enable row level security;
+alter table cashback_b2b        enable row level security;
+alter table cashback_b2c        enable row level security;
+alter table fx_rate             enable row level security;
+alter table daily_spending      enable row level security;
+alter table card_envios         enable row level security;
+
+create policy "anon read" on atm_fees_daily      for select to anon using (true);
+create policy "anon read" on card_distribution   for select to anon using (true);
+create policy "anon read" on cashback_b2b        for select to anon using (true);
+create policy "anon read" on cashback_b2c        for select to anon using (true);
+create policy "anon read" on fx_rate             for select to anon using (true);
+create policy "anon read" on daily_spending      for select to anon using (true);
+create policy "anon read" on card_envios         for select to anon using (true);
+```
+
+La vista `daily_spending_view` (usada por el dashboard en vez de la tabla cruda) hereda RLS de `daily_spending` solo si se creó con `security_invoker = true`; si al probar el dashboard esa vista devuelve vacío pese a tener datos, recrearla con esa opción o agregar el mismo tipo de policy directamente sobre la vista.
+
+**Nota de seguridad:** estas 7 tablas quedan legibles por cualquiera que tenga el anon key (que está en el HTML público). Es un desvío intencional del patrón `authenticated` que usa el resto de Payins, aceptado porque no son datos con PII — la única tabla con PII (`acceptance`) NO sigue este patrón, ver 9.3.
+
+### 9.3 · Backend seguro para `acceptance` (tiene PII)
+
+La tabla `acceptance` se sirve exclusivamente vía `api/acceptance.js` (función serverless de Vercel), que usa la `secret key` **solo del lado del servidor** y valida que quien pide datos tenga una sesión válida de `@getontop.com` contra el proyecto Payins antes de responder.
+
+Configurar en **Vercel → Project Settings → Environment Variables**:
+
+| Variable | Valor |
+|---|---|
+| `CARDOPS_SUPABASE_URL` | `https://imjowbxegzyzuoqftidr.supabase.co` |
+| `CARDOPS_SUPABASE_SECRET_KEY` | la secret key del proyecto Card Ops Dash (Settings → API Keys → secret) |
+
+No hace falta tocar RLS de `acceptance` para esto: la secret key la bypasea por diseño (rol de servicio). Si además se quiere una capa extra de defensa, se puede dejar RLS habilitada en `acceptance` sin ninguna policy para `anon`/`authenticated` (deniega todo acceso directo desde el browser, solo la secret key server-side puede leerla).
+
+### 9.4 · Probar `/api/acceptance`
+
+```bash
+npm install        # instala @supabase/supabase-js para la función serverless
+vercel dev          # o probar directo contra el deploy
+```
+
+Pegar `/api/acceptance` en el navegador ya logueado con una cuenta `@getontop.com` debe devolver JSON (`{"summary":{...},"rows":[...]}`), no el HTML del dashboard (confirma que el rewrite catch-all de `vercel.json` no está interceptando la ruta). Sin header `Authorization` válido debe devolver `401`.
+
+### 9.5 · Función SQL `acceptance_summary` (obligatoria — sin esto `/api/acceptance` falla)
+
+`acceptance` puede tener 200k+ filas en una ventana de 3 meses, y Supabase capea cada request REST a ~1000 filas sin importar el `limit`/`range` pedido. Traer todo y clasificar en el endpoint sería lento (o directamente incorrecto, si solo se toman las primeras 1000). Por eso los KPIs, el gráfico de tendencia y el top de países se calculan **dentro de la base** con esta función — el endpoint solo la llama y devuelve el resultado ya agregado.
+
+Correr en el SQL Editor del proyecto **Card Ops Dash**:
+
+```sql
+create or replace function acceptance_summary(from_date timestamptz, to_date timestamptz)
+returns table (
+  total_txns bigint,
+  accepted_txns bigint,
+  declined_txns bigint,
+  declined_by_rules_txns bigint,
+  total_volume numeric,
+  daily jsonb,
+  top_countries jsonb
+)
+language sql
+stable
+as $$
+  with dedup as (
+    -- Una transacción puede tener varias filas/mensajes (ej. reversas) — nos quedamos
+    -- con la más reciente por threddtransactionid, igual que hace el frontend.
+    -- Se excluye msgtype='Inquiry' (consultas de saldo, no son compras) — confirmado
+    -- que meses con proporción alta de Inquiry (ej. octubre 2025, ~15% vs ~5% típico)
+    -- distorsionaban fuerte el % de declined_by_rules.
+    select distinct on (threddtransactionid)
+      threddtransactionid,
+      coalesce(eventtime, localdatetime) as tx_time,
+      msgstatusreason,
+      outputtag,
+      amount_billingvalue,
+      merchantcountry
+    from acceptance
+    where localdatetime >= from_date and localdatetime <= to_date
+      and threddtransactionid is not null
+      and msgtype <> 'Inquiry'
+    order by threddtransactionid, coalesce(eventtime, localdatetime) desc
+  ),
+  classified as (
+    -- Misma fórmula de negocio que classifyAcceptance() en index.html:
+    -- 1) msgstatusreason contiene "declined" → declined
+    -- 2) si no, y outputtag = "decline" → declined_by_rules
+    -- 3) si no → accepted
+    -- Ojo: el valor real en la tabla es "Decline" (sin la "d" final), no "Declined"
+    -- — confirmado sobre 2000+ filas reales, los únicos valores de outputtag son
+    -- "Approved" y "Decline".
+    select
+      *,
+      case
+        when lower(coalesce(msgstatusreason,'')) like '%declined%' then 'declined'
+        when lower(coalesce(outputtag,'')) = 'decline' then 'declined_by_rules'
+        else 'accepted'
+      end as status
+    from dedup
+  ),
+  daily_agg as (
+    select to_char(tx_time,'YYYY-MM-DD') as day, status, count(*) as cnt
+    from classified
+    group by 1,2
+  ),
+  country_agg as (
+    select merchantcountry, sum(amount_billingvalue) as vol
+    from classified
+    group by merchantcountry
+    order by sum(amount_billingvalue) desc
+    limit 10
+  )
+  select
+    count(*)::bigint,
+    count(*) filter (where status='accepted')::bigint,
+    count(*) filter (where status='declined')::bigint,
+    count(*) filter (where status='declined_by_rules')::bigint,
+    coalesce(sum(amount_billingvalue),0),
+    (select jsonb_agg(jsonb_build_object('day',day,'status',status,'cnt',cnt)) from daily_agg),
+    (select jsonb_agg(jsonb_build_object('country',merchantcountry,'volume',vol)) from country_agg)
+  from classified;
+$$;
+```
+
+**Nota sobre validación cruzada (2026-07-02):** se comparó mes a mes contra el dashboard de referencia de la empresa. Diciembre 2025 matchea exacto (95,9/3,4/0,7). Excluir `Inquiry` corrigió el caso más grande (octubre 2025, que tenía ~15% de mensajes Inquiry vs ~5% típico). Queda un desvío chico sin explicar (~0,5-0,9 puntos porcentuales) en meses de alto volumen como junio 2026 — se probó filtrar por `direction='outbound'` y por `transactiontype='00'` y ninguno de los dos lo explica. Si en algún momento se identifica el filtro exacto que usa el dashboard de referencia, ajustar acá y en `classifyAcceptance()` de `index.html`.
+
+No hace falta `grant execute ... to anon` — la función solo se llama server-side desde `api/acceptance.js` usando la secret key (rol de servicio, bypasea grants). Si en algún momento cambia la fórmula de negocio de accepted/declined/declined_by_rules, hay que actualizarla en **dos lugares**: esta función SQL y `classifyAcceptance()` en `index.html` (esta última se usa para clasificar la muestra de transacciones recientes que sí viaja al browser para la tabla de detalle).
+
+---
+
+*Última actualización: 2026-07-02.*
