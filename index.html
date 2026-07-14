@@ -1112,7 +1112,7 @@ async function fetchCC(){
 }
 // Conteo de transacciones de Credit Card = histórico de Stripe-CC (re-etiquetado), ya
 // que la tabla credit_card no tiene una fila por transacción. Solo se usa para Txns —
-// el resto de los datos de Credit Card (monto, Gross/Cost/Net) vienen de su propia fuente.
+// el monto/TPV viene de credit_card (ver overrideCreditCardTPV) y Gross/Cost/Net de consolidated.
 async function fetchStripeCCRelabeled(){
   let rows=[], from=0;
   while(true){
@@ -1136,8 +1136,17 @@ async function fetchStripeCCRelabeled(){
   rows.forEach(r=>{ r.platform='Credit Card'; r['AñoYMes']=normMonth(r['AñoYMes']); });
   return rows.filter(r=>r['amount']==null||+r['amount']!==0);
 }
+// El Monto/TPV de Credit Card SIEMPRE sale de la tabla credit_card (deduplicada por id_payment),
+// incluso si consolidated ya trae filas nativas de Credit Card — Gross/Cost/Net de esas filas
+// nativas se dejan intactos (no se eliminan), solo se anula su "amount" para no duplicar el TPV.
+async function overrideCreditCardTPV(rows){
+  const out=rows.map(r=>r.platform==='Credit Card'&&r['P&L/FCF']==='TPV'?{...r,amount:0}:r);
+  const cc=await fetchCC();
+  cc.forEach(r=>out.push(ccToOverviewRow(r)));
+  return out;
+}
 async function mergeOverviewExtraPlatforms(rows){
-  const out=[...rows];
+  let out=[...rows];
   const hasPlat=name=>out.some(r=>r.platform===name&&r['P&L/FCF']==='TPV');
   if(!hasPlat('Personal Account')){
     try{
@@ -1145,12 +1154,9 @@ async function mergeOverviewExtraPlatforms(rows){
       pa.forEach(r=>out.push(paToOverviewRow(r)));
     }catch(e){console.warn('Personal Account supplement:',e);}
   }
-  if(!hasPlat('Credit Card')){
-    try{
-      const cc=await fetchCC();
-      cc.forEach(r=>out.push(ccToOverviewRow(r)));
-    }catch(e){console.warn('Credit Card supplement:',e);}
-  }
+  try{
+    out=await overrideCreditCardTPV(out);
+  }catch(e){console.warn('Credit Card supplement:',e);}
   return out;
 }
 function overviewPlatforms(data){
@@ -1706,7 +1712,8 @@ async function loadRevenue(){
   document.getElementById('rev-plat-cards').innerHTML=LD;
   document.getElementById('rev-comp-tbl').innerHTML=LD;
   document.getElementById('rev-blocks').innerHTML=LD;
-  const data=await fetchAll([],false,true);
+  let data=await fetchAll([],false,true);
+  data=await overrideCreditCardTPV(data);
   _revData=data;
   const tpvRows=data.filter(r=>r['P&L/FCF']==='TPV');
   const gross=sum(data,'Gross Revenue'),cost=sum(data,'Cost Revenue'),net=sum(data,'Net'),tpv=sum(tpvRows,'amount');
