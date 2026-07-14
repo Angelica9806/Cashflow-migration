@@ -1108,7 +1108,9 @@ async function fetchCC(){
     if(data.length<4999) break;
     from+=4999;
   }
-  return dedupeCCByIdPayment(rows);
+  const deduped=dedupeCCByIdPayment(rows);
+  console.log(`%c💳 credit_card fetch → crudo:${rows.length} deduplicado:${deduped.length}`,'color:#22d3ee');
+  return deduped;
 }
 // Conteo de transacciones de Credit Card = histórico de Stripe-CC (re-etiquetado), ya
 // que la tabla credit_card no tiene una fila por transacción. Solo se usa para Txns —
@@ -1140,8 +1142,11 @@ async function fetchStripeCCRelabeled(){
 // incluso si consolidated ya trae filas nativas de Credit Card — Gross/Cost/Net de esas filas
 // nativas se dejan intactos (no se eliminan), solo se anula su "amount" para no duplicar el TPV.
 async function overrideCreditCardTPV(rows){
-  const out=rows.map(r=>r.platform==='Credit Card'&&r['P&L/FCF']==='TPV'?{...r,amount:0}:r);
   const cc=await fetchCC();
+  // Si credit_card no trae filas (sin datos en el rango, error de red, RLS, etc.) no anulamos
+  // el monto nativo — mejor dejar el TPV de consolidated que perder el dato por completo.
+  if(!cc.length) return rows;
+  const out=rows.map(r=>r.platform==='Credit Card'&&r['P&L/FCF']==='TPV'?{...r,amount:0}:r);
   cc.forEach(r=>out.push(ccToOverviewRow(r)));
   return out;
 }
