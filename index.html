@@ -1073,6 +1073,24 @@ function ccToOverviewRow(r){
     client:r.client||r.vendor||null
   };
 }
+// Un mismo id_payment puede venir duplicado en credit_card bajo dos cod_invoice distintos
+// (uno de la ONT, otro de otra entidad) — para el TPV se cuenta una sola vez, quedándose
+// con la fila cuyo cod_invoice empieza con "ONT".
+function dedupeCCByIdPayment(rows){
+  const groups={}, singles=[];
+  rows.forEach(r=>{
+    const id=r.id_payment;
+    if(id==null||id===''){ singles.push(r); return; }
+    (groups[id]=groups[id]||[]).push(r);
+  });
+  const out=[...singles];
+  Object.values(groups).forEach(group=>{
+    if(group.length<=1){ out.push(...group); return; }
+    const ont=group.filter(r=>(r.cod_invoice||'').startsWith('ONT'));
+    out.push(...(ont.length?ont:group));
+  });
+  return out;
+}
 async function fetchCC(){
   let rows=[], from=0;
   while(true){
@@ -1090,7 +1108,7 @@ async function fetchCC(){
     if(data.length<4999) break;
     from+=4999;
   }
-  return rows;
+  return dedupeCCByIdPayment(rows);
 }
 // Conteo de transacciones de Credit Card = histórico de Stripe-CC (re-etiquetado), ya
 // que la tabla credit_card no tiene una fila por transacción. Solo se usa para Txns —
