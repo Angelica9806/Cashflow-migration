@@ -898,6 +898,8 @@ function normPlat(p){
   if(!p) return null;
   const t = p.trim();
   if(t === 'Stripe') return null;             // transfers, excluir
+  if(t === 'BVNK - CRYPTO') return null;       // ahora sumada dentro de Personal Account, excluir para no duplicar
+  if(t === 'Stripe-CC') return null;           // reemplazada por Credit Card (tabla credit_card), excluir
   if(t.toLowerCase() === 'stripe-wire') return 'Stripe-Wire';
   return t;
 }
@@ -1090,6 +1092,30 @@ async function fetchCC(){
   }
   return rows;
 }
+// Total TX de Credit Card = count histórico de Stripe-CC TPV (la tabla credit_card
+// no tiene una fila por transacción, así que no sirve para contar transacciones)
+async function fetchStripeCCTxCount(){
+  let rows=[], from=0;
+  while(true){
+    let q=SB.from('consolidated').select('*').eq('platform','Stripe-CC').eq('"P&L/FCF"','TPV');
+    if(F.from)        q=q.gte('date',F.from);
+    if(F.to)          q=q.lte('date',F.to);
+    if(F.d1)          q=q.gte('dia',+F.d1);
+    if(F.d2)          q=q.lte('dia',+F.d2);
+    if(F.cli)         q=q.eq('client',F.cli);
+    if(F.vrn)         q=q.eq('new_vendor',F.vrn);
+    if(F.clientName)  q=q.eq('client_name',F.clientName);
+    if(F.accMgr)      q=q.eq('account_manager',F.accMgr);
+    q=q.range(from,from+4998);
+    const {data,error}=await q;
+    if(error){console.error('Stripe-CC tx count fetch error:',error);break;}
+    if(!data?.length) break;
+    rows=rows.concat(data);
+    if(data.length<4999) break;
+    from+=4999;
+  }
+  return rows.filter(r=>r['amount']==null||+r['amount']!==0).length;
+}
 async function mergeOverviewExtraPlatforms(rows){
   const out=[...rows];
   const hasPlat=name=>out.some(r=>r.platform===name&&r['P&L/FCF']==='TPV');
@@ -1120,8 +1146,8 @@ async function loadFilters(){
   try{
     // Platform: lista fija de plataformas conocidas (evita query lenta por JOIN externo)
     const knownPlatforms=[
-      'BVNK - CRYPTO','Dlocal','JPM','Local Payment',
-      'Stripe-ACH','Stripe-CC','Stripe-Wire','Supra','Tazapay','Zamp',
+      'Dlocal','JPM','Local Payment',
+      'Stripe-ACH','Stripe-Wire','Supra','Tazapay','Zamp',
       'Personal Account','Credit Card'
     ];
     // Construir mapa normalizado → valores originales DB
@@ -1480,12 +1506,14 @@ async function loadOverview(){
 
   // ── Platform breakdown (dinámico, ordenado por TPV) ──
   const platforms=overviewPlatforms(data);
+  const ccTxCount = platforms.includes('Credit Card') ? await fetchStripeCCTxCount() : null;
   let platHtml='';
   platforms.forEach((p,i)=>{
     const pRows=data.filter(r=>r.platform===p);
     const lP=lastM?sum((fairByM[lastM]||[]).filter(r=>r.platform===p),'amount'):0;
     const pP=prevM?sum((fairByM[prevM]||[]).filter(r=>r.platform===p),'amount'):0;
-    platHtml+=platCard(p,sum(pRows,'amount'),pRows.length,pct(lP,pP),PAL[i%PAL.length]);
+    const txCount = (p==='Credit Card' && ccTxCount!=null) ? ccTxCount : pRows.length;
+    platHtml+=platCard(p,sum(pRows,'amount'),txCount,pct(lP,pP),PAL[i%PAL.length]);
   });
   document.getElementById('plat-kpis').innerHTML=platHtml||'<div class="empty">Sin plataformas</div>';
 
