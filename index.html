@@ -1092,12 +1092,13 @@ async function fetchCC(){
   }
   return rows;
 }
-// Total TX de Credit Card = count histórico de Stripe-CC TPV (la tabla credit_card
-// no tiene una fila por transacción, así que no sirve para contar transacciones)
-async function fetchStripeCCTxCount(){
+// Filas históricas de Stripe-CC re-etiquetadas como Credit Card: se usan tanto para
+// el revenue (Gross/Cost/Net, ausente en la tabla credit_card) como para el conteo de
+// transacciones (la tabla credit_card no tiene una fila por transacción)
+async function fetchStripeCCRelabeled(){
   let rows=[], from=0;
   while(true){
-    let q=SB.from('consolidated').select('*').eq('platform','Stripe-CC').eq('"P&L/FCF"','TPV');
+    let q=SB.from('consolidated').select('*').eq('platform','Stripe-CC');
     if(F.from)        q=q.gte('date',F.from);
     if(F.to)          q=q.lte('date',F.to);
     if(F.d1)          q=q.gte('dia',+F.d1);
@@ -1108,13 +1109,14 @@ async function fetchStripeCCTxCount(){
     if(F.accMgr)      q=q.eq('account_manager',F.accMgr);
     q=q.range(from,from+4998);
     const {data,error}=await q;
-    if(error){console.error('Stripe-CC tx count fetch error:',error);break;}
+    if(error){console.error('Stripe-CC revenue fetch error:',error);break;}
     if(!data?.length) break;
     rows=rows.concat(data);
     if(data.length<4999) break;
     from+=4999;
   }
-  return rows.filter(r=>r['amount']==null||+r['amount']!==0).length;
+  rows.forEach(r=>{ r.platform='Credit Card'; r['AñoYMes']=normMonth(r['AñoYMes']); });
+  return rows.filter(r=>r['amount']==null||+r['amount']!==0);
 }
 async function mergeOverviewExtraPlatforms(rows){
   const out=[...rows];
@@ -1454,6 +1456,7 @@ function comboPlatCard(name,dep,vDep,g,vg,c,n,vn,tx,color){
 // OVERVIEW TAB
 // ══════════════════════════════════════
 let _ovData=null; // cache para refreshComp sin re-fetch
+let _ovCcTPV=[]; // cache de filas Stripe-CC (TPV) re-etiquetadas como Credit Card, para refreshComp
 
 async function loadOverview(){
   document.getElementById('ov-kpis').innerHTML=LD;
@@ -1506,13 +1509,15 @@ async function loadOverview(){
 
   // ── Platform breakdown (dinámico, ordenado por TPV) ──
   const platforms=overviewPlatforms(data);
-  const ccTxCount = platforms.includes('Credit Card') ? await fetchStripeCCTxCount() : null;
+  const ccStripeTPV = platforms.includes('Credit Card')
+    ? (await fetchStripeCCRelabeled()).filter(r=>r['P&L/FCF']==='TPV')
+    : [];
   let platHtml='';
   platforms.forEach((p,i)=>{
     const pRows=data.filter(r=>r.platform===p);
     const lP=lastM?sum((fairByM[lastM]||[]).filter(r=>r.platform===p),'amount'):0;
     const pP=prevM?sum((fairByM[prevM]||[]).filter(r=>r.platform===p),'amount'):0;
-    const txCount = (p==='Credit Card' && ccTxCount!=null) ? ccTxCount : pRows.length;
+    const txCount = p==='Credit Card' ? ccStripeTPV.length : pRows.length;
     platHtml+=platCard(p,sum(pRows,'amount'),txCount,pct(lP,pP),PAL[i%PAL.length]);
   });
   document.getElementById('plat-kpis').innerHTML=platHtml||'<div class="empty">Sin plataformas</div>';
@@ -1526,7 +1531,8 @@ async function loadOverview(){
   hBarC('c-top10',top10.map(c=>c.id),{label:'TPV',data:top10.map(c=>c.amt),backgroundColor:top10.map((_,i)=>`rgba(34,197,94,${1-i*.09})`),borderRadius:3});
 
   // ── Comparación de períodos ──
-  buildCompTable(data, ms, cutDay);
+  _ovCcTPV=ccStripeTPV;
+  buildCompTable(data, ms, cutDay, ccStripeTPV);
 
   // ── Pivot: Cliente × Plataforma (ignora filtro plataforma, columnas por volumen) ──
   const pivotData=await mergeOverviewExtraPlatforms(await fetchAll([],true)); // skipPlat=true
@@ -1548,20 +1554,23 @@ async function loadOverview(){
 }
 
 // ── Comparación de Períodos: todos los meses del rango hasta día X ──
-function buildCompTable(data, ms, cutDay){
+function buildCompTable(data, ms, cutDay, ccTPVRows=[]){
   if(ms.length<1){
     document.getElementById('comp-tbl').innerHTML='<div class="empty">Sin datos en el período</div>';
     return;
   }
   const byM={};
   ms.forEach(m=>{byM[m]=data.filter(r=>r['AñoYMes']===m&&+r.dia<=cutDay)});
+  // Txns de Credit Card: histórico de Stripe-CC (la tabla credit_card no tiene 1 fila por transacción)
+  const ccByM={};
+  ms.forEach(m=>{ccByM[m]=ccTPVRows.filter(r=>r['AñoYMes']===m&&+r.dia<=cutDay)});
   const allPlats=overviewPlatforms(data);
   document.getElementById('comp-subtitle').textContent=ms.join('  ·  ')+`  ·  días 1–${cutDay}`;
   const hasVar=ms.length>=2;
   let html=`<table><thead><tr><th>Plataforma</th>${ms.map(m=>`<th class="r">${m}</th><th class="r">Txns</th>`).join('')}${hasVar?'<th class="r">Var %</th><th class="r">Δ USD</th>':''}</tr></thead><tbody>`;
   const rows=allPlats.map(p=>{
     const amts=ms.map(m=>sum(byM[m].filter(r=>r.platform===p),'amount'));
-    const txns=ms.map(m=>byM[m].filter(r=>r.platform===p).length);
+    const txns=ms.map(m=>p==='Credit Card'?ccByM[m].length:byM[m].filter(r=>r.platform===p).length);
     return{p,amts,txns};
   }).sort((a,b)=>b.amts[b.amts.length-1]-a.amts[a.amts.length-1]);
   const totAmts=ms.map((_,i)=>rows.reduce((s,r)=>s+r.amts[i],0));
@@ -1587,7 +1596,7 @@ function refreshComp(){
   const inp=document.getElementById('compDay');
   const day=inp.value?+inp.value:(F.d2?+F.d2:31);
   const ms=mons(_ovData);
-  buildCompTable(_ovData,ms,day);
+  buildCompTable(_ovData,ms,day,_ovCcTPV);
 }
 
 // ══════════════════════════════════════
@@ -1680,6 +1689,7 @@ async function loadRevenue(){
   document.getElementById('rev-comp-tbl').innerHTML=LD;
   document.getElementById('rev-blocks').innerHTML=LD;
   const data=await fetchAll([],false,true);
+  data.push(...await fetchStripeCCRelabeled());
   _revData=data;
   const tpvRows=data.filter(r=>r['P&L/FCF']==='TPV');
   const gross=sum(data,'Gross Revenue'),cost=sum(data,'Cost Revenue'),net=sum(data,'Net'),tpv=sum(tpvRows,'amount');
