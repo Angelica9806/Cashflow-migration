@@ -1491,6 +1491,14 @@ async function loadOverview(){
   const data=await mergeOverviewExtraPlatforms(await fetchAll());
   _ovData=data;
 
+  // Txns de Credit Card = histórico TPV de Stripe-CC — ni las filas nativas de consolidated
+  // (amount anulado) ni las de credit_card representan 1 fila = 1 transacción, así que se
+  // excluyen de cualquier conteo genérico y se reemplazan por este conteo en todos lados.
+  const ccStripeTPV = data.some(r=>r.platform==='Credit Card')
+    ? (await fetchStripeCCRelabeled()).filter(r=>r['P&L/FCF']==='TPV')
+    : [];
+  const txnOf = rowsArr => rowsArr.filter(r=>r.platform!=='Credit Card').length;
+
   // ── Diagnóstico en consola (F12 → Console) para verificar datos vs Looker ──
   console.group('%c📊 Dashboard Data Audit','color:#22c55e;font-weight:700');
   console.log('Filtros activos → Fechas:',F.from,'→',F.to,'| Días:',F.d1,'-',F.d2,'| P&L:',F.pl,'| Plataformas:',F.plat.length?F.plat:'Todas');
@@ -1506,18 +1514,19 @@ async function loadOverview(){
   console.groupEnd();
 
   const ms=mons(data), byM=grp(data,'AñoYMes');
-  const total=sum(data,'amount'), txn=data.length;
+  const total=sum(data,'amount'), txn=txnOf(data)+ccStripeTPV.length;
   const lastM=ms[ms.length-1], prevM=ms[ms.length-2];
 
   // Day cutoff para comparación justa MoM (default 31 = mes completo)
   const cutDay=F.d2?+F.d2:31;
   const fairByM=grp(data.filter(r=>+r.dia<=cutDay),'AñoYMes');
+  const ccFairByM=grp(ccStripeTPV.filter(r=>+r.dia<=cutDay),'AñoYMes');
 
   // Variaciones vs mes anterior (mismo rango de días)
   const lAmt=lastM?sum(fairByM[lastM]||[],'amount'):0;
   const pAmt=prevM?sum(fairByM[prevM]||[],'amount'):0;
-  const lTxn=lastM?(fairByM[lastM]||[]).length:0;
-  const pTxn=prevM?(fairByM[prevM]||[]).length:0;
+  const lTxn=lastM?txnOf(fairByM[lastM]||[])+(ccFairByM[lastM]||[]).length:0;
+  const pTxn=prevM?txnOf(fairByM[prevM]||[])+(ccFairByM[prevM]||[]).length:0;
   const vAmt=pct(lAmt,pAmt), vTxn=pct(lTxn,pTxn);
 
   // Subtitle
@@ -1533,9 +1542,6 @@ async function loadOverview(){
 
   // ── Platform breakdown (dinámico, ordenado por TPV) ──
   const platforms=overviewPlatforms(data);
-  const ccStripeTPV = platforms.includes('Credit Card')
-    ? (await fetchStripeCCRelabeled()).filter(r=>r['P&L/FCF']==='TPV')
-    : [];
   let platHtml='';
   platforms.forEach((p,i)=>{
     const pRows=data.filter(r=>r.platform===p);
@@ -1548,7 +1554,8 @@ async function loadOverview(){
 
   // ── Charts ──
   lineC('c-am',ms,[lineDS('TPV',ms.map(m=>sum(byM[m]||[],'amount')),'rgb(34,197,94)',true)]);
-  lineC('c-tm',ms,[lineDS('Txns',ms.map(m=>(byM[m]||[]).length),'rgb(96,165,250)',true)],true);
+  const ccByMFull=grp(ccStripeTPV,'AñoYMes');
+  lineC('c-tm',ms,[lineDS('Txns',ms.map(m=>txnOf(byM[m]||[])+(ccByMFull[m]||[]).length),'rgb(96,165,250)',true)],true);
   barC('c-plat',platforms,[{label:'TPV',data:platforms.map(p=>sum(data.filter(r=>r.platform===p),'amount')),backgroundColor:platforms.map((_,i)=>PAL[i%PAL.length]),borderRadius:4}]);
   const byCli=grp(data,'client');
   const top10=Object.entries(byCli).map(([c,rs])=>({id:c,amt:sum(rs,'amount')})).sort((a,b)=>b.amt-a.amt).slice(0,10);
@@ -1715,30 +1722,34 @@ async function loadRevenue(){
   let data=await fetchAll([],false,true);
   data=await overrideCreditCardTPV(data);
   _revData=data;
+  // Txns de Credit Card = histórico de Stripe-CC TPV — ni las filas nativas de consolidated
+  // (amount anulado) ni las de credit_card representan 1 fila = 1 transacción, así que se
+  // excluyen de cualquier conteo genérico y se reemplazan por este conteo en todos lados.
+  const ccStripeTPV = data.some(r=>r.platform==='Credit Card')
+    ? (await fetchStripeCCRelabeled()).filter(r=>r['P&L/FCF']==='TPV')
+    : [];
+  const txnOf = rowsArr => rowsArr.filter(r=>r.platform!=='Credit Card').length;
   const tpvRows=data.filter(r=>r['P&L/FCF']==='TPV');
   const gross=sum(data,'Gross Revenue'),cost=sum(data,'Cost Revenue'),net=sum(data,'Net'),tpv=sum(tpvRows,'amount');
-  const totalTX=tpvRows.length;
+  const totalTX=txnOf(tpvRows)+ccStripeTPV.length;
   const ms=mons(data),byM=grp(data,'AñoYMes');
   const lastM=ms[ms.length-1],prevM=ms[ms.length-2];
   const vG=pct(sum(byM[lastM]||[],'Gross Revenue'),sum(byM[prevM]||[],'Gross Revenue'));
   const vC=pct(sum(byM[lastM]||[],'Cost Revenue'),sum(byM[prevM]||[],'Cost Revenue'));
   const vN=pct(sum(byM[lastM]||[],'Net'),sum(byM[prevM]||[],'Net'));
   const tpvL=tpvRows.filter(r=>r['AñoYMes']===lastM),tpvP=tpvRows.filter(r=>r['AñoYMes']===prevM);
+  const ccByM=grp(ccStripeTPV,'AñoYMes');
+  const tpvLtx=txnOf(tpvL)+(ccByM[lastM]||[]).length, tpvPtx=txnOf(tpvP)+(ccByM[prevM]||[]).length;
 
   document.getElementById('rev-kpis').innerHTML=
     kcard('TPV',`$${fmt(tpv)}`,pct(sum(tpvL,'amount'),sum(tpvP,'amount')),'vs mes anterior','#a78bfa')+
     kcard('Gross Revenue',`$${fmt(gross)}`,vG,'vs mes anterior','#22c55e')+
     kcard('Cost Revenue',`$${fmt(cost)}`,vC,'vs mes anterior','#ef4444')+
     kcard('Net Revenue',`$${fmt(net)}`,vN,`Margen: ${((net/(gross||1))*100).toFixed(1)}%`,'#60a5fa')+
-    kcard('Total TX',fmtI(totalTX),pct(tpvL.length,tpvP.length),'vs mes anterior','#22d3ee');
+    kcard('Total TX',fmtI(totalTX),pct(tpvLtx,tpvPtx),'vs mes anterior','#22d3ee');
 
   // Platform cards (last month vs prev month)
   const revPlats=uniqs(data,'platform');
-  // Txns de Credit Card = histórico de Stripe-CC TPV (la tabla credit_card no tiene 1 fila por transacción);
-  // el resto de los datos de Credit Card (Gross/Cost/Net/monto) se dejan tal cual vienen en `data`.
-  const ccStripeTPV = revPlats.includes('Credit Card')
-    ? (await fetchStripeCCRelabeled()).filter(r=>r['P&L/FCF']==='TPV')
-    : [];
   const lastRows=data.filter(r=>r['AñoYMes']===lastM);
   const prevRows=data.filter(r=>r['AñoYMes']===prevM);
   let platCardsHtml='';
