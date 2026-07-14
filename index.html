@@ -899,12 +899,12 @@ function normPlat(p){
   const t = p.trim();
   if(t === 'Stripe') return null;             // transfers, excluir
   if(t === 'BVNK - CRYPTO') return null;       // ahora sumada dentro de Personal Account, excluir para no duplicar
-  if(t === 'Stripe-CC') return null;           // reemplazada por Credit Card (tabla credit_card), excluir
+  if(t === 'Stripe-CC') return null;           // reemplazada por Credit Card, excluir
   if(t.toLowerCase() === 'stripe-wire') return 'Stripe-Wire';
   return t;
 }
 // Normaliza "AñoYMes" a formato zero-padded (2026-4 → 2026-04) para que todas
-// las fuentes (consolidated, personal_account, credit_card) agrupen igual
+// las fuentes (consolidated, personal_account) agrupen igual
 function normMonth(v){
   if(!v) return v;
   const m=String(v).trim().match(/^(\d{4})-(\d{1,2})$/);
@@ -1004,6 +1004,20 @@ function classifyAcceptance(row){
 // FETCH  (P&L/FCF y plataforma multi filtrados client-side o server-side)
 // skipPlat=true → ignora el filtro de plataforma (usado en la tabla pivot)
 // ══════════════════════════════════════
+// TPV de Credit Card: un mismo id_payment puede venir duplicado en consolidated bajo dos filas
+// (ej. una OMF y otra ONT) — para el TPV se cuenta una sola vez, sin importar cuál se conserve.
+// Gross/Cost/Net de cada fila se dejan intactos (no se tocan, solo se anula el "amount" extra).
+function dedupeCreditCardTPV(rows){
+  const seen=new Set();
+  return rows.map(r=>{
+    if(r.platform!=='Credit Card'||r['P&L/FCF']!=='TPV') return r;
+    const id=r.id_payment;
+    if(id==null||id==='') return r;
+    if(seen.has(id)) return {...r,amount:0};
+    seen.add(id);
+    return r;
+  });
+}
 async function fetchAll(extra=[], skipPlat=false, skipPL=false) {
   let rows=[], from=0;
   while(true){
@@ -1046,6 +1060,7 @@ async function fetchAll(extra=[], skipPlat=false, skipPL=false) {
   const beforeAmtFilter = rows.length;
   rows=rows.filter(r=>r['amount']==null||+r['amount']!==0);
   const excludedByAmt = beforeAmtFilter - rows.length;
+  rows=dedupeCreditCardTPV(rows);
   console.log(`%c🔍 fetchAll →  DB crudo:${rawCount}  excluidos normPlat:${excludedByNorm}  excluidos amount=0:${excludedByAmt}  resultado final:${rows.length}  P&L filtro:[${F.pl}]`,'color:#22d3ee');
   return rows;
 }
@@ -1062,60 +1077,9 @@ function paToOverviewRow(r){
     client:r.client||r.vendor||null
   };
 }
-function ccToOverviewRow(r){
-  return{
-    ...r,
-    platform:'Credit Card',
-    amount:+(r.amount??r.tpv??r.deposit??0),
-    'P&L/FCF':'TPV',
-    'AñoYMes':normMonth(paMonth(r)),
-    dia:paDay(r),
-    client:r.client||r.vendor||null
-  };
-}
-// Un mismo id_payment puede venir duplicado en credit_card bajo dos cod_invoice distintos
-// (uno de la ONT, otro de otra entidad) — para el TPV se cuenta una sola vez, quedándose
-// con la fila cuyo cod_invoice empieza con "ONT".
-function dedupeCCByIdPayment(rows){
-  const groups={}, singles=[];
-  rows.forEach(r=>{
-    const id=r.id_payment;
-    if(id==null||id===''){ singles.push(r); return; }
-    (groups[id]=groups[id]||[]).push(r);
-  });
-  const out=[...singles];
-  Object.values(groups).forEach(group=>{
-    if(group.length<=1){ out.push(...group); return; }
-    const ont=group.filter(r=>(r.cod_invoice||'').startsWith('ONT'));
-    out.push(...(ont.length?ont:group));
-  });
-  return out;
-}
-async function fetchCC(){
-  let rows=[], from=0, lastErr=null;
-  while(true){
-    let q=SB.from('credit_card').select('*');
-    if(F.from) q=q.gte('date',F.from);
-    if(F.to)   q=q.lte('date',F.to);
-    if(F.d1)   q=q.gte('dia',+F.d1);
-    if(F.d2)   q=q.lte('dia',+F.d2);
-    if(F.cli)  q=q.eq('client',F.cli);
-    q=q.range(from,from+4998);
-    const {data,error}=await q;
-    if(error){console.error('credit_card fetch error:',error);lastErr=error;break;}
-    if(!data?.length) break;
-    rows=rows.concat(data);
-    if(data.length<4999) break;
-    from+=4999;
-  }
-  const deduped=dedupeCCByIdPayment(rows);
-  console.log(`%c💳 credit_card fetch → crudo:${rows.length} deduplicado:${deduped.length}`,'color:#22d3ee');
-  window.__ccDebug=`credit_card → crudo:${rows.length} dedup:${deduped.length}${lastErr?' | ERROR: '+(lastErr.message||JSON.stringify(lastErr)):''}`;
-  return deduped;
-}
 // Conteo de transacciones de Credit Card = histórico de Stripe-CC (re-etiquetado), ya
-// que la tabla credit_card no tiene una fila por transacción. Solo se usa para Txns —
-// el monto/TPV viene de credit_card (ver overrideCreditCardTPV) y Gross/Cost/Net de consolidated.
+// que un id_payment de Credit Card no equivale a 1 fila = 1 transacción. Solo se usa para
+// Txns — Gross/Cost/Net/TPV de Credit Card vienen de consolidated (ver dedupeCreditCardTPV).
 async function fetchStripeCCRelabeled(){
   let rows=[], from=0;
   while(true){
@@ -1139,20 +1103,8 @@ async function fetchStripeCCRelabeled(){
   rows.forEach(r=>{ r.platform='Credit Card'; r['AñoYMes']=normMonth(r['AñoYMes']); });
   return rows.filter(r=>r['amount']==null||+r['amount']!==0);
 }
-// El Monto/TPV de Credit Card SIEMPRE sale de la tabla credit_card (deduplicada por id_payment),
-// incluso si consolidated ya trae filas nativas de Credit Card — Gross/Cost/Net de esas filas
-// nativas se dejan intactos (no se eliminan), solo se anula su "amount" para no duplicar el TPV.
-async function overrideCreditCardTPV(rows){
-  const cc=await fetchCC();
-  // Si credit_card no trae filas (sin datos en el rango, error de red, RLS, etc.) no anulamos
-  // el monto nativo — mejor dejar el TPV de consolidated que perder el dato por completo.
-  if(!cc.length) return rows;
-  const out=rows.map(r=>r.platform==='Credit Card'&&r['P&L/FCF']==='TPV'?{...r,amount:0}:r);
-  cc.forEach(r=>out.push(ccToOverviewRow(r)));
-  return out;
-}
 async function mergeOverviewExtraPlatforms(rows){
-  let out=[...rows];
+  const out=[...rows];
   const hasPlat=name=>out.some(r=>r.platform===name&&r['P&L/FCF']==='TPV');
   if(!hasPlat('Personal Account')){
     try{
@@ -1160,9 +1112,6 @@ async function mergeOverviewExtraPlatforms(rows){
       pa.forEach(r=>out.push(paToOverviewRow(r)));
     }catch(e){console.warn('Personal Account supplement:',e);}
   }
-  try{
-    out=await overrideCreditCardTPV(out);
-  }catch(e){console.warn('Credit Card supplement:',e);}
   return out;
 }
 function overviewPlatforms(data){
@@ -1497,9 +1446,9 @@ async function loadOverview(){
   const data=await mergeOverviewExtraPlatforms(await fetchAll());
   _ovData=data;
 
-  // Txns de Credit Card = histórico TPV de Stripe-CC — ni las filas nativas de consolidated
-  // (amount anulado) ni las de credit_card representan 1 fila = 1 transacción, así que se
-  // excluyen de cualquier conteo genérico y se reemplazan por este conteo en todos lados.
+  // Txns de Credit Card = histórico TPV de Stripe-CC — un id_payment de Credit Card no
+  // equivale a 1 fila = 1 transacción, así que esas filas se excluyen de cualquier conteo
+  // genérico y se reemplazan por este conteo en todos lados.
   const ccStripeTPV = data.some(r=>r.platform==='Credit Card')
     ? (await fetchStripeCCRelabeled()).filter(r=>r['P&L/FCF']==='TPV')
     : [];
@@ -1598,11 +1547,11 @@ function buildCompTable(data, ms, cutDay, ccTPVRows=[]){
   }
   const byM={};
   ms.forEach(m=>{byM[m]=data.filter(r=>r['AñoYMes']===m&&+r.dia<=cutDay)});
-  // Txns de Credit Card: histórico de Stripe-CC (la tabla credit_card no tiene 1 fila por transacción)
+  // Txns de Credit Card: histórico de Stripe-CC (un id_payment no equivale a 1 transacción)
   const ccByM={};
   ms.forEach(m=>{ccByM[m]=ccTPVRows.filter(r=>r['AñoYMes']===m&&+r.dia<=cutDay)});
   const allPlats=overviewPlatforms(data);
-  document.getElementById('comp-subtitle').textContent=ms.join('  ·  ')+`  ·  días 1–${cutDay}`+(window.__ccDebug?`  ·  🔍 ${window.__ccDebug}`:'');
+  document.getElementById('comp-subtitle').textContent=ms.join('  ·  ')+`  ·  días 1–${cutDay}`;
   const hasVar=ms.length>=2;
   let html=`<table><thead><tr><th>Plataforma</th>${ms.map(m=>`<th class="r">${m}</th><th class="r">Txns</th>`).join('')}${hasVar?'<th class="r">Var %</th><th class="r">Δ USD</th>':''}</tr></thead><tbody>`;
   const rows=allPlats.map(p=>{
@@ -1725,8 +1674,7 @@ async function loadRevenue(){
   document.getElementById('rev-plat-cards').innerHTML=LD;
   document.getElementById('rev-comp-tbl').innerHTML=LD;
   document.getElementById('rev-blocks').innerHTML=LD;
-  let data=await fetchAll([],false,true);
-  data=await overrideCreditCardTPV(data);
+  const data=await fetchAll([],false,true);
   _revData=data;
   // Txns de Credit Card = histórico de Stripe-CC TPV — ni las filas nativas de consolidated
   // (amount anulado) ni las de credit_card representan 1 fila = 1 transacción, así que se
@@ -1853,7 +1801,7 @@ function buildRevCompTable(data,ms,cutDay,ccTPVRows=[]){
   if(!lastM||!prevM){document.getElementById('rev-comp-tbl').innerHTML='<div class="empty">Necesitas al menos 2 meses de datos</div>';return;}
   const prevRows=data.filter(r=>r['AñoYMes']===prevM&&+r.dia<=cutDay);
   const currRows=data.filter(r=>r['AñoYMes']===lastM&&+r.dia<=cutDay);
-  // Txns de Credit Card = histórico de Stripe-CC TPV (la tabla credit_card no tiene 1 fila por transacción)
+  // Txns de Credit Card = histórico de Stripe-CC TPV (un id_payment no equivale a 1 transacción)
   const ccPrevTPV=ccTPVRows.filter(r=>r['AñoYMes']===prevM&&+r.dia<=cutDay);
   const ccCurrTPV=ccTPVRows.filter(r=>r['AñoYMes']===lastM&&+r.dia<=cutDay);
   const allPlats=uniqs(data,'platform');
@@ -2622,8 +2570,22 @@ function paDeposit(r){return +(r.deposit!==undefined&&r.deposit!==null?r.deposit
 function paGross(r){return +(r.gross!==undefined&&r.gross!==null?r.gross:r['Gross Revenue']!==undefined&&r['Gross Revenue']!==null?r['Gross Revenue']:0);}
 function paCost(r){return +(r.cost!==undefined&&r.cost!==null?r.cost:r['Cost Revenue']!==undefined&&r['Cost Revenue']!==null?r['Cost Revenue']:0);}
 function paNet(r){return +(r.net!==undefined&&r.net!==null?r.net:r.Net!==undefined&&r.Net!==null?r.Net:0);}
-function paMonth(r){return r['AñoYMes']||r.period||r.month||r.year_month||r.anio_mes||'';}
-function paDay(r){return +(r.dia||r.day||r.day_of_month||1);}
+// Acceso flexible a mes/día por si la fuente no trae "AñoYMes"/"dia" (como consolidated) —
+// se deriva de la columna "date" (YYYY-MM-DD), la más confiable, antes de caer a year+month.
+function paMonth(r){
+  if(r['AñoYMes']) return r['AñoYMes'];
+  if(r.period) return r.period;
+  if(r.date){ const [y,m]=String(r.date).split('-'); if(y&&m) return `${y}-${m}`; }
+  if(r.year&&r.month) return `${r.year}-${String(r.month).padStart(2,'0')}`;
+  return r.year_month||r.anio_mes||r.month||'';
+}
+function paDay(r){
+  if(r.dia!=null) return +r.dia;
+  if(r.day!=null) return +r.day;
+  if(r.day_of_month!=null) return +r.day_of_month;
+  if(r.date){ const d=+String(r.date).split('-')[2]; if(d) return d; }
+  return 1;
+}
 function paPlatform(r){return r.platform||r.Platform||'';}
 function sumPA(arr,fn){return arr.reduce(function(s,r){return s+fn(r);},0);}
 
