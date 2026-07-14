@@ -1092,9 +1092,9 @@ async function fetchCC(){
   }
   return rows;
 }
-// Filas históricas de Stripe-CC re-etiquetadas como Credit Card: se usan tanto para
-// el revenue (Gross/Cost/Net, ausente en la tabla credit_card) como para el conteo de
-// transacciones (la tabla credit_card no tiene una fila por transacción)
+// Conteo de transacciones de Credit Card = histórico de Stripe-CC (re-etiquetado), ya
+// que la tabla credit_card no tiene una fila por transacción. Solo se usa para Txns —
+// el resto de los datos de Credit Card (monto, Gross/Cost/Net) vienen de su propia fuente.
 async function fetchStripeCCRelabeled(){
   let rows=[], from=0;
   while(true){
@@ -1689,7 +1689,6 @@ async function loadRevenue(){
   document.getElementById('rev-comp-tbl').innerHTML=LD;
   document.getElementById('rev-blocks').innerHTML=LD;
   const data=await fetchAll([],false,true);
-  data.push(...await fetchStripeCCRelabeled());
   _revData=data;
   const tpvRows=data.filter(r=>r['P&L/FCF']==='TPV');
   const gross=sum(data,'Gross Revenue'),cost=sum(data,'Cost Revenue'),net=sum(data,'Net'),tpv=sum(tpvRows,'amount');
@@ -1710,6 +1709,11 @@ async function loadRevenue(){
 
   // Platform cards (last month vs prev month)
   const revPlats=uniqs(data,'platform');
+  // Txns de Credit Card = histórico de Stripe-CC TPV (la tabla credit_card no tiene 1 fila por transacción);
+  // el resto de los datos de Credit Card (Gross/Cost/Net/monto) se dejan tal cual vienen en `data`.
+  const ccStripeTPV = revPlats.includes('Credit Card')
+    ? (await fetchStripeCCRelabeled()).filter(r=>r['P&L/FCF']==='TPV')
+    : [];
   const lastRows=data.filter(r=>r['AñoYMes']===lastM);
   const prevRows=data.filter(r=>r['AñoYMes']===prevM);
   let platCardsHtml='';
@@ -1718,7 +1722,7 @@ async function loadRevenue(){
     const prv=prevRows.filter(r=>r.platform===p);
     const g=sum(cur,'Gross Revenue'),c2=sum(cur,'Cost Revenue'),n=sum(cur,'Net');
     const gp=sum(prv,'Gross Revenue'),np=sum(prv,'Net');
-    const tx=data.filter(r=>r.platform===p&&r['P&L/FCF']==='TPV').length;
+    const tx=p==='Credit Card'?ccStripeTPV.length:data.filter(r=>r.platform===p&&r['P&L/FCF']==='TPV').length;
     platCardsHtml+=revPlatCard(p,g,pct(g,gp),c2,n,pct(n,np),tx,PAL[i%PAL.length]);
   });
   document.getElementById('rev-plat-cards').innerHTML=platCardsHtml||'<div class="empty">Sin datos</div>';
@@ -1726,7 +1730,7 @@ async function loadRevenue(){
   // Comparison table
   const revCompDay=document.getElementById('revCompDay');
   const cutDay=revCompDay&&revCompDay.value?+revCompDay.value:(F.d2?+F.d2:new Date().getDate());
-  buildRevCompTable(data,ms,cutDay);
+  buildRevCompTable(data,ms,cutDay,ccStripeTPV);
 
   document.getElementById('rev-blocks').innerHTML=`<div id="rev-plat-charts"></div>`;
 
@@ -1754,6 +1758,7 @@ async function loadRevenue(){
     const bid=plat.replace(/[^a-z0-9]/gi,'_');
     const byPM=grp(pr,'AñoYMes');
     const g=sum(pr,'Gross Revenue'),c2=sum(pr,'Cost Revenue'),n=sum(pr,'Net'),t=sum(pr.filter(r=>r['P&L/FCF']==='TPV'),'amount');
+    const txns=plat==='Credit Card'?ccStripeTPV.length:pr.filter(r=>r['P&L/FCF']==='TPV').length;
     const margin=g?((n/g)*100).toFixed(1)+'%':'–';
     html+=`<div class="pblock" style="margin-bottom:0">
       <div class="ph">
@@ -1770,7 +1775,7 @@ async function loadRevenue(){
             <div class="mk"><div class="mk-l">Gross</div><div class="mk-v">$${fmt(g)}</div></div>
             <div class="mk"><div class="mk-l">Net</div><div class="mk-v">$${fmt(n)}</div></div>
             <div class="mk"><div class="mk-l">TPV</div><div class="mk-v w">$${fmt(t)}</div></div>
-            <div class="mk"><div class="mk-l">Txns</div><div class="mk-v w">${fmtI(pr.filter(r=>r['P&L/FCF']==='TPV').length)}</div></div>
+            <div class="mk"><div class="mk-l">Txns</div><div class="mk-v w">${fmtI(txns)}</div></div>
           </div>
           <div>
             <div style="font-size:8px;font-weight:700;color:var(--di);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px">Gross / Cost / Net</div>
@@ -1801,11 +1806,14 @@ async function loadRevenue(){
   });
 }
 
-function buildRevCompTable(data,ms,cutDay){
+function buildRevCompTable(data,ms,cutDay,ccTPVRows=[]){
   const lastM=ms[ms.length-1],prevM=ms[ms.length-2];
   if(!lastM||!prevM){document.getElementById('rev-comp-tbl').innerHTML='<div class="empty">Necesitas al menos 2 meses de datos</div>';return;}
   const prevRows=data.filter(r=>r['AñoYMes']===prevM&&+r.dia<=cutDay);
   const currRows=data.filter(r=>r['AñoYMes']===lastM&&+r.dia<=cutDay);
+  // Txns de Credit Card = histórico de Stripe-CC TPV (la tabla credit_card no tiene 1 fila por transacción)
+  const ccPrevTPV=ccTPVRows.filter(r=>r['AñoYMes']===prevM&&+r.dia<=cutDay);
+  const ccCurrTPV=ccTPVRows.filter(r=>r['AñoYMes']===lastM&&+r.dia<=cutDay);
   const allPlats=uniqs(data,'platform');
   document.getElementById('rev-comp-subtitle').textContent=`${prevM} días 1–${cutDay}  vs  ${lastM} días 1–${cutDay}`;
   let html=`<table><thead><tr>
@@ -1821,8 +1829,9 @@ function buildRevCompTable(data,ms,cutDay){
   const rows=allPlats.map(p=>{
     const pr=prevRows.filter(r=>r.platform===p),cr=currRows.filter(r=>r.platform===p);
     const prTPV=pr.filter(r=>r['P&L/FCF']==='TPV'),crTPV=cr.filter(r=>r['P&L/FCF']==='TPV');
-    return{p,pm:sum(prTPV,'amount'),pg:sum(pr,'Gross Revenue'),pc:sum(pr,'Cost Revenue'),pn:sum(pr,'Net'),pt:prTPV.length,
-      cm:sum(crTPV,'amount'),cg:sum(cr,'Gross Revenue'),cc:sum(cr,'Cost Revenue'),cn:sum(cr,'Net'),ct:crTPV.length};
+    const isCC=p==='Credit Card';
+    return{p,pm:sum(prTPV,'amount'),pg:sum(pr,'Gross Revenue'),pc:sum(pr,'Cost Revenue'),pn:sum(pr,'Net'),pt:isCC?ccPrevTPV.length:prTPV.length,
+      cm:sum(crTPV,'amount'),cg:sum(cr,'Gross Revenue'),cc:sum(cr,'Cost Revenue'),cn:sum(cr,'Net'),ct:isCC?ccCurrTPV.length:crTPV.length};
   }).sort((a,b)=>b.cg-a.cg);
   let tpm=0,tpg=0,tpc=0,tpn=0,tpt=0,tcm=0,tcg=0,tcc=0,tcn=0,tct=0;
   rows.forEach(({p,pm,pg,pc,pn,pt,cm,cg,cc,cn,ct})=>{
