@@ -1092,7 +1092,7 @@ function dedupeCCByIdPayment(rows){
   return out;
 }
 async function fetchCC(){
-  let rows=[], from=0;
+  let rows=[], from=0, lastErr=null;
   while(true){
     let q=SB.from('credit_card').select('*');
     if(F.from) q=q.gte('date',F.from);
@@ -1102,7 +1102,7 @@ async function fetchCC(){
     if(F.cli)  q=q.eq('client',F.cli);
     q=q.range(from,from+4998);
     const {data,error}=await q;
-    if(error){console.error('credit_card fetch error:',error);break;}
+    if(error){console.error('credit_card fetch error:',error);lastErr=error;break;}
     if(!data?.length) break;
     rows=rows.concat(data);
     if(data.length<4999) break;
@@ -1110,6 +1110,7 @@ async function fetchCC(){
   }
   const deduped=dedupeCCByIdPayment(rows);
   console.log(`%c💳 credit_card fetch → crudo:${rows.length} deduplicado:${deduped.length}`,'color:#22d3ee');
+  window.__ccDebug=`credit_card → crudo:${rows.length} dedup:${deduped.length}${lastErr?' | ERROR: '+(lastErr.message||JSON.stringify(lastErr)):''}`;
   return deduped;
 }
 // Conteo de transacciones de Credit Card = histórico de Stripe-CC (re-etiquetado), ya
@@ -1601,7 +1602,7 @@ function buildCompTable(data, ms, cutDay, ccTPVRows=[]){
   const ccByM={};
   ms.forEach(m=>{ccByM[m]=ccTPVRows.filter(r=>r['AñoYMes']===m&&+r.dia<=cutDay)});
   const allPlats=overviewPlatforms(data);
-  document.getElementById('comp-subtitle').textContent=ms.join('  ·  ')+`  ·  días 1–${cutDay}`;
+  document.getElementById('comp-subtitle').textContent=ms.join('  ·  ')+`  ·  días 1–${cutDay}`+(window.__ccDebug?`  ·  🔍 ${window.__ccDebug}`:'');
   const hasVar=ms.length>=2;
   let html=`<table><thead><tr><th>Plataforma</th>${ms.map(m=>`<th class="r">${m}</th><th class="r">Txns</th>`).join('')}${hasVar?'<th class="r">Var %</th><th class="r">Δ USD</th>':''}</tr></thead><tbody>`;
   const rows=allPlats.map(p=>{
