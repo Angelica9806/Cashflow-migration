@@ -1077,6 +1077,32 @@ function paToOverviewRow(r){
     client:r.client||r.vendor||null
   };
 }
+// BVNK - CRYPTO: excluida de consolidated como plataforma independiente (ver normPlat) — sus
+// filas de TPV se traen aparte desde consolidated (trae Gross/Cost/Net/AñoYMes/dia ya calculados,
+// a diferencia de la tabla cruda "bvnk") y se suman dentro de Personal Account, tanto en Overview
+// (relabeled vía paToOverviewRow) como en el tab dedicado (loadPersonalAccount).
+async function fetchBVNKForPA(){
+  let rows=[], from=0;
+  while(true){
+    let q=SB.from('consolidated').select('*').eq('platform','BVNK - CRYPTO').eq('"P&L/FCF"','TPV');
+    if(F.from)        q=q.gte('date',F.from);
+    if(F.to)          q=q.lte('date',F.to);
+    if(F.d1)          q=q.gte('dia',+F.d1);
+    if(F.d2)          q=q.lte('dia',+F.d2);
+    if(F.cli)         q=q.eq('client',F.cli);
+    if(F.vrn)         q=q.eq('new_vendor',F.vrn);
+    if(F.clientName)  q=q.eq('client_name',F.clientName);
+    if(F.accMgr)      q=q.eq('account_manager',F.accMgr);
+    q=q.range(from,from+4998);
+    const {data,error}=await q;
+    if(error){console.error('BVNK fetch error:',error);break;}
+    if(!data?.length) break;
+    rows=rows.concat(data);
+    if(data.length<4999) break;
+    from+=4999;
+  }
+  return rows.filter(r=>r['amount']==null||+r['amount']!==0);
+}
 // Conteo de transacciones de Credit Card = histórico de Stripe-CC (re-etiquetado), ya
 // que un id_payment de Credit Card no equivale a 1 fila = 1 transacción. Solo se usa para
 // Txns — Gross/Cost/Net/TPV de Credit Card vienen de consolidated (ver dedupeCreditCardTPV).
@@ -1106,12 +1132,20 @@ async function fetchStripeCCRelabeled(){
 async function mergeOverviewExtraPlatforms(rows){
   const out=[...rows];
   const hasPlat=name=>out.some(r=>r.platform===name&&r['P&L/FCF']==='TPV');
+  let pa=[];
+  try{ pa=await fetchPA(); }catch(e){ console.warn('Personal Account fetch:',e); }
+  const paBVNK=pa.filter(r=>paPlatform(r)==='BVNK - CRYPTO');
+  const paOthers=pa.filter(r=>paPlatform(r)!=='BVNK - CRYPTO');
+  // El resto de personal_account (BVNK ACH/SWIFT/USDC, etc.) puede llegar nativo por consolidated
+  // bajo el tag 'Personal Account' — solo se suma aparte si todavía no llegó (evita duplicar).
   if(!hasPlat('Personal Account')){
-    try{
-      const pa=await fetchPA();
-      pa.forEach(r=>out.push(paToOverviewRow(r)));
-    }catch(e){console.warn('Personal Account supplement:',e);}
+    paOthers.forEach(r=>out.push(paToOverviewRow(r)));
   }
+  // BVNK - CRYPTO SIEMPRE queda excluida de consolidated como plataforma nativa (ver normPlat),
+  // sin importar si 'Personal Account' ya llegó nativa — nunca la incluye. Se prioriza la copia
+  // de personal_account (si ya la trae) y solo se va a consolidated si personal_account no la trajo.
+  const bvnkRows = paBVNK.length ? paBVNK : await fetchBVNKForPA().catch(e=>{console.warn('BVNK supplement:',e);return [];});
+  bvnkRows.forEach(r=>out.push(paToOverviewRow(r)));
   return out;
 }
 function overviewPlatforms(data){
@@ -2596,7 +2630,13 @@ async function loadPersonalAccount(){
   });
 
   let data;
-  try { data=await fetchPA(); } catch(e){
+  try {
+    const pa=await fetchPA();
+    // Si personal_account ya trae 'BVNK - CRYPTO' nativa, no traerla también desde consolidated
+    // (ver fetchBVNKForPA) — sumaría el TPV por duplicado.
+    const bvnk=pa.some(r=>paPlatform(r)==='BVNK - CRYPTO')?[]:await fetchBVNKForPA();
+    data=pa.concat(bvnk);
+  } catch(e){
     document.getElementById('pa-rev-kpis').innerHTML=`<div style="color:#ef4444;padding:12px;font-size:11px">Error fetch: ${e.message}</div>`;
     return;
   }
