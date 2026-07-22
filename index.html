@@ -1065,12 +1065,15 @@ async function fetchAll(extra=[], skipPlat=false, skipPL=false) {
   return rows;
 }
 
-// ── Filas sintéticas para Overview cuando consolidated aún no incluye PA / CC ──
+// ── Filas sintéticas para Overview/Revenue cuando consolidated aún no incluye PA / CC ──
 function paToOverviewRow(r){
   return{
     ...r,
     platform:'Personal Account',
     amount:paDeposit(r),
+    'Gross Revenue':paGross(r),
+    'Cost Revenue':paCost(r),
+    'Net':paNet(r),
     'P&L/FCF':'TPV',
     'AñoYMes':normMonth(paMonth(r)),
     dia:paDay(r),
@@ -1129,7 +1132,7 @@ async function fetchStripeCCRelabeled(){
   rows.forEach(r=>{ r.platform='Credit Card'; r['AñoYMes']=normMonth(r['AñoYMes']); });
   return rows.filter(r=>r['amount']==null||+r['amount']!==0);
 }
-async function mergeOverviewExtraPlatforms(rows){
+async function mergePAPlatforms(rows){
   const out=[...rows];
   const hasPlat=name=>out.some(r=>r.platform===name&&r['P&L/FCF']==='TPV');
   let pa=[];
@@ -1477,7 +1480,7 @@ async function loadOverview(){
   document.getElementById('pivot-tbl').innerHTML=LD;
   document.getElementById('comp-tbl').innerHTML=LD;
 
-  const data=await mergeOverviewExtraPlatforms(await fetchAll());
+  const data=await mergePAPlatforms(await fetchAll());
   _ovData=data;
 
   // Txns de Credit Card = histórico TPV de Stripe-CC — un id_payment de Credit Card no
@@ -1555,7 +1558,7 @@ async function loadOverview(){
   buildCompTable(data, ms, cutDay, ccStripeTPV);
 
   // ── Pivot: Cliente × Plataforma (ignora filtro plataforma, columnas por volumen) ──
-  const pivotData=await mergeOverviewExtraPlatforms(await fetchAll([],true)); // skipPlat=true
+  const pivotData=await mergePAPlatforms(await fetchAll([],true)); // skipPlat=true
   const allPlats=overviewPlatforms(pivotData);
   const platTotals=Object.fromEntries(allPlats.map(p=>[p,sum(pivotData.filter(r=>r.platform===p),'amount')]));
   const sortedPlats=allPlats.sort((a,b)=>platTotals[b]-platTotals[a]);
@@ -1708,7 +1711,7 @@ async function loadRevenue(){
   document.getElementById('rev-plat-cards').innerHTML=LD;
   document.getElementById('rev-comp-tbl').innerHTML=LD;
   document.getElementById('rev-blocks').innerHTML=LD;
-  const data=await fetchAll([],false,true);
+  const data=await mergePAPlatforms(await fetchAll([],false,true));
   _revData=data;
   // Txns de Credit Card = histórico de Stripe-CC TPV — ni las filas nativas de consolidated
   // (amount anulado) ni las de credit_card representan 1 fila = 1 transacción, así que se
