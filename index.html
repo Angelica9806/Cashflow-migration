@@ -898,7 +898,7 @@ function normPlat(p){
   if(!p) return null;
   const t = p.trim();
   if(t === 'Stripe') return null;             // transfers, excluir
-  if(t === 'BVNK - CRYPTO') return null;       // ahora sumada dentro de Personal Account, excluir para no duplicar
+  if(t === 'BVNK - CRYPTO') return null;       // se re-agrega como card propia vía mergePAPlatforms, excluir aquí para no duplicar
   if(t === 'Stripe-CC') return null;           // reemplazada por Credit Card, excluir
   if(t.toLowerCase() === 'stripe-wire') return 'Stripe-Wire';
   return t;
@@ -1066,10 +1066,10 @@ async function fetchAll(extra=[], skipPlat=false, skipPL=false) {
 }
 
 // ── Filas sintéticas para Overview/Revenue cuando consolidated aún no incluye PA / CC ──
-function paToOverviewRow(r){
+function paToOverviewRow(r,platformOverride){
   return{
     ...r,
-    platform:'Personal Account',
+    platform:platformOverride||'Personal Account',
     amount:paDeposit(r),
     'Gross Revenue':paGross(r),
     'Cost Revenue':paCost(r),
@@ -1082,8 +1082,8 @@ function paToOverviewRow(r){
 }
 // BVNK - CRYPTO: excluida de consolidated como plataforma independiente (ver normPlat) — sus
 // filas de TPV se traen aparte desde consolidated (trae Gross/Cost/Net/AñoYMes/dia ya calculados,
-// a diferencia de la tabla cruda "bvnk") y se suman dentro de Personal Account, tanto en Overview
-// (relabeled vía paToOverviewRow) como en el tab dedicado (loadPersonalAccount).
+// a diferencia de la tabla cruda "bvnk") y se muestran como card propia en Overview/Revenue
+// (relabeled vía paToOverviewRow, separada de Personal Account) además del tab dedicado (loadPersonalAccount).
 async function fetchBVNKForPA(){
   let rows=[], from=0;
   while(true){
@@ -1148,7 +1148,8 @@ async function mergePAPlatforms(rows){
   // sin importar si 'Personal Account' ya llegó nativa — nunca la incluye. Se prioriza la copia
   // de personal_account (si ya la trae) y solo se va a consolidated si personal_account no la trajo.
   const bvnkRows = paBVNK.length ? paBVNK : await fetchBVNKForPA().catch(e=>{console.warn('BVNK supplement:',e);return [];});
-  bvnkRows.forEach(r=>out.push(paToOverviewRow(r)));
+  // BVNK - CRYPTO se muestra como card propia en Overview/Revenue, separada de Personal Account
+  bvnkRows.forEach(r=>out.push(paToOverviewRow(r,'BVNK - CRYPTO')));
   return out;
 }
 function overviewPlatforms(data){
