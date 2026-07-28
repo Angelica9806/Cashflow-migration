@@ -1083,7 +1083,7 @@ function paToOverviewRow(r,platformOverride){
 // BVNK - CRYPTO: excluida de consolidated como plataforma independiente (ver normPlat) — sus
 // filas de TPV se traen aparte desde consolidated (trae Gross/Cost/Net/AñoYMes/dia ya calculados,
 // a diferencia de la tabla cruda "bvnk") y se muestran como card propia en Overview/Revenue
-// (relabeled vía paToOverviewRow, separada de Personal Account) además del tab dedicado (loadPersonalAccount).
+// (relabeled vía paToOverviewRow). NO se muestra en el tab Personal Account (ver loadPersonalAccount).
 async function fetchBVNKForPA(){
   let rows=[], from=0;
   while(true){
@@ -1132,7 +1132,9 @@ async function fetchStripeCCRelabeled(){
   rows.forEach(r=>{ r.platform='Credit Card'; r['AñoYMes']=normMonth(r['AñoYMes']); });
   return rows.filter(r=>r['amount']==null||+r['amount']!==0);
 }
-async function mergePAPlatforms(rows){
+// skipPlat=true (usado por la pivot, que ignora el filtro de plataforma) → BVNK se agrega
+// siempre, sin mirar F.plat.
+async function mergePAPlatforms(rows, skipPlat=false){
   const out=[...rows];
   const hasPlat=name=>out.some(r=>r.platform===name&&r['P&L/FCF']==='TPV');
   let pa=[];
@@ -1147,9 +1149,12 @@ async function mergePAPlatforms(rows){
   // BVNK - CRYPTO SIEMPRE queda excluida de consolidated como plataforma nativa (ver normPlat),
   // sin importar si 'Personal Account' ya llegó nativa — nunca la incluye. Se prioriza la copia
   // de personal_account (si ya la trae) y solo se va a consolidated si personal_account no la trajo.
-  const bvnkRows = paBVNK.length ? paBVNK : await fetchBVNKForPA().catch(e=>{console.warn('BVNK supplement:',e);return [];});
-  // BVNK - CRYPTO se muestra como card propia en Overview/Revenue, separada de Personal Account
-  bvnkRows.forEach(r=>out.push(paToOverviewRow(r,'BVNK - CRYPTO')));
+  const bvnkAllowed = skipPlat || !F.plat.length || F.plat.includes('BVNK - CRYPTO');
+  if(bvnkAllowed){
+    const bvnkRows = paBVNK.length ? paBVNK : await fetchBVNKForPA().catch(e=>{console.warn('BVNK supplement:',e);return [];});
+    // BVNK - CRYPTO se muestra como card propia en Overview/Revenue, independiente de Personal Account
+    bvnkRows.forEach(r=>out.push(paToOverviewRow(r,'BVNK - CRYPTO')));
+  }
   return out;
 }
 function overviewPlatforms(data){
@@ -1176,6 +1181,9 @@ async function loadFilters(){
       if(norm===null) return;
       (normToRaw[norm]=normToRaw[norm]||[]).push(raw);
     });
+    // BVNK - CRYPTO: normPlat la excluye siempre (para no duplicarse en consolidated, ver mergePAPlatforms),
+    // pero sí debe poder des/seleccionarse en el filtro ya que se agrega aparte como card propia.
+    normToRaw['BVNK - CRYPTO']=['BVNK - CRYPTO'];
     // Poblar plataformas como checkboxes en el dropdown
     const platItems=document.getElementById('plat-items');
     Object.keys(normToRaw).sort().forEach(norm=>{
@@ -1559,7 +1567,7 @@ async function loadOverview(){
   buildCompTable(data, ms, cutDay, ccStripeTPV);
 
   // ── Pivot: Cliente × Plataforma (ignora filtro plataforma, columnas por volumen) ──
-  const pivotData=await mergePAPlatforms(await fetchAll([],true)); // skipPlat=true
+  const pivotData=await mergePAPlatforms(await fetchAll([],true), true); // skipPlat=true
   const allPlats=overviewPlatforms(pivotData);
   const platTotals=Object.fromEntries(allPlats.map(p=>[p,sum(pivotData.filter(r=>r.platform===p),'amount')]));
   const sortedPlats=allPlats.sort((a,b)=>platTotals[b]-platTotals[a]);
@@ -2636,10 +2644,8 @@ async function loadPersonalAccount(){
   let data;
   try {
     const pa=await fetchPA();
-    // Si personal_account ya trae 'BVNK - CRYPTO' nativa, no traerla también desde consolidated
-    // (ver fetchBVNKForPA) — sumaría el TPV por duplicado.
-    const bvnk=pa.some(r=>paPlatform(r)==='BVNK - CRYPTO')?[]:await fetchBVNKForPA();
-    data=pa.concat(bvnk);
+    // BVNK - CRYPTO queda excluida del tab Personal Account
+    data=pa.filter(r=>paPlatform(r)!=='BVNK - CRYPTO');
   } catch(e){
     document.getElementById('pa-rev-kpis').innerHTML=`<div style="color:#ef4444;padding:12px;font-size:11px">Error fetch: ${e.message}</div>`;
     return;
