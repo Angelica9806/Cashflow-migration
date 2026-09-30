@@ -1132,6 +1132,50 @@ async function fetchStripeCCRelabeled(){
   rows.forEach(r=>{ r.platform='Credit Card'; r['AñoYMes']=normMonth(r['AñoYMes']); });
   return rows.filter(r=>r['amount']==null||+r['amount']!==0);
 }
+// JPM (9068): el TPV se lee directo de la tabla "JPM_9068" (no de consolidated) y reemplaza
+// las filas TPV 'JPM (9068)' que traiga consolidated. La tabla no trae los campos calculados de
+// la vista, así que se replican aquí: Gross 0, Cost 4 por TPV, Net -4 desde 2025-05 (0 antes).
+async function fetchJPM9068TPV(){
+  let rows=[], from=0;
+  while(true){
+    let q=SB.from('JPM_9068').select('*').eq('"P&L/FCF"','TPV');
+    if(F.from) q=q.gte('date',F.from);
+    if(F.to)   q=q.lte('date',F.to);
+    if(F.cli)  q=q.eq('client',F.cli);
+    q=q.order('id',{ascending:true}).range(from,from+4998);
+    const {data,error}=await q;
+    if(error) throw error;
+    if(!data?.length) break;
+    rows=rows.concat(data);
+    if(data.length<4999) break;
+    from+=4999;
+  }
+  const AM=window.AM_MAP||{};
+  return rows
+    .filter(r=>r.date&&(r['amount']==null||+r['amount']!==0))
+    .map(r=>{
+      const dia=+r.date.slice(8,10), am=AM[r.client]||{};
+      const vendor=r.vendor&&r.vendor.trim()?r.vendor:null;
+      return{
+        ...r,
+        platform:'JPM (9068)',
+        'P&L/FCF':'TPV',
+        'AñoYMes':normMonth(r.date.slice(0,7)),
+        dia,
+        week:'Week '+Math.ceil(dia/7),
+        'Gross Revenue':0,
+        'Cost Revenue':4,
+        'Net':r.date>='2025-05-01'?-4:0,
+        new_vendor:vendor||'SIN VRN',
+        client_name:am.name||null,
+        account_manager:am.mgr&&am.mgr!=='–'?am.mgr:null
+      };
+    })
+    .filter(r=>(!F.d1||r.dia>=+F.d1)&&(!F.d2||r.dia<=+F.d2)
+      &&(!F.vrn||r.new_vendor===F.vrn)
+      &&(!F.clientName||r.client_name===F.clientName)
+      &&(!F.accMgr||r.account_manager===F.accMgr));
+}
 // skipPlat=true (usado por la pivot, que ignora el filtro de plataforma) → BVNK se agrega
 // siempre, sin mirar F.plat.
 async function mergePAPlatforms(rows, skipPlat=false){
@@ -1154,6 +1198,17 @@ async function mergePAPlatforms(rows, skipPlat=false){
     const bvnkRows = paBVNK.length ? paBVNK : await fetchBVNKForPA().catch(e=>{console.warn('BVNK supplement:',e);return [];});
     // BVNK - CRYPTO se muestra como card propia en Overview/Revenue, independiente de Personal Account
     bvnkRows.forEach(r=>out.push(paToOverviewRow(r,'BVNK - CRYPTO')));
+  }
+  // JPM (9068): TPV desde la tabla JPM_9068 en lugar de consolidated. Si la tabla no devuelve
+  // nada (error o RLS), se conservan las filas de consolidated como respaldo.
+  const jpmAllowed = (skipPlat || !F.plat.length || F.plat.includes('JPM (9068)'))
+    && (!F.pl.length || F.pl.includes('TPV'));
+  if(jpmAllowed){
+    const jpmRows=await fetchJPM9068TPV().catch(e=>{console.warn('JPM_9068 fetch:',e);return [];});
+    if(jpmRows.length){
+      const isJPMTPV=r=>r.platform==='JPM (9068)'&&r['P&L/FCF']==='TPV';
+      return out.filter(r=>!isJPMTPV(r)).concat(jpmRows);
+    }
   }
   return out;
 }
